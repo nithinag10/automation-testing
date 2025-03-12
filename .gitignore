@@ -12,6 +12,7 @@ ENV/
 .vscode/
 
 # Screenshots and temporary files
+*.png
 !example_screenshot.png
 temp_*
 
