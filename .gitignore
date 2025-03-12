@@ -12,10 +12,11 @@ ENV/
 .vscode/
 
 # Screenshots and temporary files
-*.png
 !example_screenshot.png
 temp_*
 
 # OS specific
 .DS_Store
 Thumbs.db
+
+.env

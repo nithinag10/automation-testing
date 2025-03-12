@@ -1,3 +1,9 @@
-Flask==2.2.3
-Werkzeug==2.2.3
-gunicorn==20.1.0
+uiautomator2
+Pillow
+google-generativeai
+python-dotenv
+langgraph>=0.0.21
+langchain
+langchain-openai
+langchain-community
+pydantic>=2.0.0
