@@ -17,6 +17,7 @@ from langgraph.prebuilt import create_react_agent
 from langgraph_supervisor import create_supervisor
 from device_actions import DeviceActions
 from screenshot_analyzer import ScreenshotAnalyzer
+from grid_overlay import GridOverlay
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -37,7 +38,7 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0)
 # Define tools for the agents
 @tool
 def take_screenshot(output_path: str = None) -> str:
-    """Take a screenshot of the Android device's current screen using ADB."""
+    """Take a screenshot of the Android device's current screen using ADB. Let the output path be a simple time stamp"""
     print("\n=== Taking Screenshot ===")
 
     if output_path is None:
@@ -96,53 +97,71 @@ def analyze_screenshot(screenshot_path: str) -> str:
     return extracted_text
 
 @tool
-def click_at_coordinates(x: int, y: int) -> str:
-    """Click at the specified coordinates (x, y) on the screen."""
-    print(f"\n=== Clicking at ({x}, {y}) ===")
+def click_grid(grid_number: int) -> str:
+    """Perform a click action at the center of the specified grid cell.
+    
+    Args:
+        grid_number (int): The grid cell number (starting from 1) where the click should occur.
+    
+    Returns:
+        str: Success message with grid number and corresponding screen coordinates,
+             or error message if the click failed.
+    """
+    print(f"\n=== Clicking at grid {grid_number} ===")
     print(f"Screen bounds: 1080x2400")  # Known device resolution
     
-    # Validate coordinates
-    if not (0 <= x <= 1080 and 0 <= y <= 2400):
-        error_msg = f"Coordinates ({x}, {y}) out of bounds for 1080x2400 screen"
+    # Initialize GridOverlay with the device's specifications
+    grid_overlay = GridOverlay(
+        finger_touch_size_mm=7,
+        ppi=405,
+        screen_resolution=(1080, 2400)
+    )
+    
+    # Convert grid number to screen coordinates
+    try:
+        x, y = grid_overlay.get_coordinates_for_grid(grid_number)
+    except ValueError as e:
+        error_msg = f"Invalid grid number: {str(e)}"
         print(f"Error: {error_msg}")
         return error_msg
-        
+    
+    print(f"Converted grid {grid_number} to screen coordinates ({x}, {y})")
     print("Executing device.click() method...")
     # Use the device's click method directly
     success = device.click(x, y)
     
     if success:
         print("Click action successful")
-        return f"Clicked at coordinates ({x}, {y})."
+        return f"Clicked at grid {grid_number} which corresponds to screen coordinates ({x}, {y})."
     else:
-        error_msg = f"Failed to click at coordinates ({x}, {y})."
+        error_msg = f"Failed to click at grid {grid_number}."
         print(f"Error: {error_msg}")
         return error_msg
 
-@tool
-def swipe_on_screen(start_x: int, start_y: int, end_x: int, end_y: int, duration: float = 0.5) -> str:
-    """Swipe from start coordinates to end coordinates on the screen."""
-    print(f"\n=== Swiping from ({start_x}, {start_y}) to ({end_x}, {end_y}) ===")
-    print(f"Screen bounds: 1080x2400")  # Known device resolution
-    print(f"Swipe duration: {duration}s")
+# @tool
+# def swipe_on_screen(start_x: int, start_y: int, end_x: int, end_y: int, duration: float = 0.5) -> str:
+#     """Swipe from start coordinates to end coordinates on the screen."""
+#     print(f"\n=== Swiping from ({start_x}, {start_y}) to ({end_x}, {end_y}) ===")
+#     print(f"Screen bounds: 1080x2400")  # Known device resolution
+#     print(f"Swipe duration: {duration}s")
     
-    # Validate coordinates
-    if not (0 <= start_x <= 1080 and 0 <= start_y <= 2400 and 
-            0 <= end_x <= 1080 and 0 <= end_y <= 2400):
-        error_msg = f"Coordinates out of bounds for 1080x2400 screen"
-        print(f"Error: {error_msg}")
-        return error_msg
+#     # Validate coordinates
+#     if not (0 <= start_x <= 1080 and 0 <= start_y <= 2400 and 
+#             0 <= end_x <= 1080 and 0 <= end_y <= 2400):
+#         error_msg = f"Coordinates out of bounds for 1080x2400 screen"
+#         print(f"Error: {error_msg}")
+#         return error_msg
         
-    print("Executing swipe command...")
-    success = device.swipe(start_x, start_y, end_x, end_y, duration=duration)
+#     print("Executing swipe command...")
+#     success = device.swipe(start_x, start_y, end_x, end_y, duration=duration)
     
-    if success:
-        print("Swipe action successful")
-        return f"Swiped from ({start_x}, {start_y}) to ({end_x}, {end_y})."
-    else:
-        error_msg = f"Failed to swipe from ({start_x}, {start_y}) to ({end_x}, {end_y})."
-        print(f"Error: {error_msg}")
-        return error_msg
+#     if success:
+#         print("Swipe action successful")
+#         return f"Swiped from ({start_x}, {start_y}) to ({end_x}, {end_y})."
+#     else:
+#         error_msg = f"Failed to swipe from ({start_x}, {start_y}) to ({end_x}, {end_y})."
+#         print(f"Error: {error_msg}")
+#         return error_msg
 
 @tool
 def input_text(text: str) -> str:
@@ -213,14 +232,12 @@ action_agent = create_react_agent(
     tools=[
     take_screenshot,
     analyze_screenshot,
-    click_at_coordinates,
-    swipe_on_screen,
+    click_grid,
+    # swipe_on_screen,
     ask_human_for_help,
     ],
     prompt="""
-You are an Action Agent for Android devices. You perform UI interactions like clicking, swiping, and text input.
-Always start by capturing the current screen state (screenshot) before performing an action.
-If uncertain, ask for human help.
+You are an Action Agent for Android devices. You will analyse what action to be perfomed choose approperite grid and clicks grid. If not certain , you call ask_human_for_help
 """,
     name="action_agent"
 )
@@ -231,7 +248,7 @@ validation_agent = create_react_agent(
     tools=[
     take_screenshot,
     analyze_screenshot,
-    swipe_on_screen,
+    # swipe_on_screen,
     ask_human_for_help,
     ],
     prompt="""
@@ -281,5 +298,5 @@ def run_supervisor(task_description: str):
 
 if __name__ == "__main__":
     # Example: Automate opening the settings app and validating the settings screen.
-    task = "Open facebook application and check you are getting feeds properly"
+    task = "Open Whatsapp, go to calls from the bottom right , call the second person on the list. If the calls successfully dails that it is success"
     run_supervisor(task)

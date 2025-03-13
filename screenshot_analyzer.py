@@ -11,26 +11,15 @@ import json
 from typing import Literal, List, Dict, Union, Optional
 from datetime import datetime
 from typing_extensions import TypedDict, Annotated
+from PIL import Image
 
 # Load environment variables
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# LangGraph and LangChain imports
-from langgraph.graph import StateGraph, END, START
-from langgraph.types import Command
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, FunctionMessage, BaseMessage
-from langchain_openai import ChatOpenAI
-from langchain_core.tools import tool, Tool
-from langchain_core.prompts import ChatPromptTemplate
-from langgraph.prebuilt import create_react_agent
-from langgraph.channels import Topic
-from langchain_core.output_parsers import StrOutputParser
-
-# Import local modules
-from screenshot_analyzer import ScreenshotAnalyzer
 from device_actions import DeviceActions
+from grid_overlay import GridOverlay
 
 # Load environment variables from .env file
 try:
@@ -76,6 +65,7 @@ class ScreenshotAnalyzer:
         # Set up UI Automator connection (if available)
         self.device = None
         self.device_serial = device_serial
+        self.device_actions = DeviceActions()
         
         if UI_AUTOMATOR_AVAILABLE:
             try:
@@ -138,7 +128,7 @@ class ScreenshotAnalyzer:
             
         try:
             # Take screenshot using UIAutomator2
-            self.device.screenshot(output_path)
+            self.device_actions.take_screenshot(output_path)
             
             if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 print(f"Screenshot saved to {output_path}")
@@ -191,43 +181,24 @@ class ScreenshotAnalyzer:
             response = self.genai_client.models.generate_content(
                 model='gemini-2.0-flash',
                 contents=[
-                    """Analyze the given image of a mobile screen and extract structured details with precise grid locations. Ensure all elements are categorized systematically from top to bottom. Describe the screen in a sequential manner, mentioning what appears at the top, middle, and bottom. The output should follow this structure:. Example output :  
-   - The interface consists of a **status bar at the top**, a **list of messages in the middle**, and a **navigation bar at the bottom**.  
+                    """
+Role:
+You are an expert screen reader specializing in translating mobile phone screenshots into highly detailed text descriptions for blind users. Your primary skill is accurately identifying and explaining all visible elements while associating them with the correct grid number to help users navigate the screen effectively.
 
-2. **Top Section (Status Bar & Header - Grid: 1-20):**  
-   - At the **very top**, the **status bar** displays:  
-     - Time: "12:40" (Grid: 6-8)  
-     - Battery: 87% (Grid: 8-9)  
-     - WiFi & Signal Strength: (Grid: 7-8)  
-   - Just below, the **header section** includes:  
-     - App Name: "WhatsApp" (Grid: 12-14)  
-     - QR Code Scanner icon (Grid: 17-18)  
-     - Camera icon (Grid: 18-19)  
+Task:
+Given a mobile phone screenshot that includes grid numbers, your job is to extract and describe every visible detail on the screen. Each element must be paired with its corresponding grid number so that blind users can precisely identify its location.
 
-3. **Middle Section (Messages & Conversations - Grid: 21-170):**  
-   - In the **center of the screen**, multiple chat conversations are listed:  
-     - **"Lbs Beauties"** (Grid: 62-67)  
-       - 1 unread message  
-       - Last message preview: "😍❤️❤️" (Grid: 66-67)  
-       - Timestamp: "12:14 PM" (Grid: 68-70)  
-     - **"L.B.S Park Lane"** (Grid: 81-86)  
-       - No unread messages  
-       - Last message: "👌🏼" (Grid: 94-96)  
-       - Timestamp: "11:49 AM" (Grid: 98-100)  
+What Are grid numbers?
+Its already present on the screenshot.
+Each grid number represents a specific area of the screen where users can interact.
 
-4. **Bottom Section (Navigation & UI Elements - Grid: 191-210):**  
-   - At the **very bottom**, the **navigation bar** contains:  
-     - "Chats" (Grid: 192-193)  
-     - "Updates" (Grid: 194-195)  
-     - "Communities" (Grid: 196-197)  
-     - "Calls" (Grid: 199-200)  
-   - Additionally, a **Floating Action Button** (FAB) is present at (Grid: 179-180).  
+Requirements:
+Explain everything on the screen, including text, buttons, icons, images, and any minor details, no matter how small.
+After each explanation, tell the grid number visible on the screenshot in those small grids that you are referring to.
+Ensure clarity and organization to maximize usability.
+Use a structured format to make it easy for blind users to understand and navigate the screen.
 
-5. **Additional Elements:**  
-   - Profile Picture (Grid: 62-63)  
-   - Notification Badge showing unread count (28) at (Grid: 192)  
-
-*"Ensure that every element is accurately categorized from top to bottom. Mention elements sequentially as they appear on the screen, ensuring clarity in their placement."*  """,
+""",
                     img
                 ]
             )
@@ -265,7 +236,7 @@ class ScreenshotAnalyzer:
         
         # Step 3: Extract text with Gemini
         if GENAI_AVAILABLE and self.genai_client:
-            extracted_text = self.extract_text_with_gemini(screenshot_path)
+            extracted_text = self.extract_text_with_gemini(grid_path)
             result["extracted_text"] = extracted_text
             
         return result

@@ -68,31 +68,31 @@ class DeviceActions:
             print(f"Error connecting to device: {str(e)}")
             self.device = None
             
-    def click(self, x, y, duration=0.05):
+    def click(self, x, y):
         """
-        Click on the specified coordinates.
+        Click on the specified coordinates using ADB shell input tap command.
         
         Args:
-            x (int): X-coordinate to click.
-            y (int): Y-coordinate to click.
-            duration (float, optional): Duration of the click in seconds. Default is 0.05.
-                
+            x (int): X coordinate
+            y (int): Y coordinate
+    
         Returns:
-            bool: True if the click was successful, False otherwise.
+            bool: True if click was successful, False otherwise
         """
-        if not UI_AUTOMATOR_AVAILABLE or not self.device:
-            print("UIAutomator2 not available or no device connected. Cannot perform click.")
+        if self.device is None:
+            print("No device connected")
             return False
-            
+        
         try:
-            self.device.click(x, y, duration=duration)
+            # Use ADB shell input tap command
+            self.device.shell(f'input tap {x} {y}')
             print(f"Clicked at coordinates: ({x}, {y})")
             return True
         except Exception as e:
-            print(f"Error clicking at coordinates ({x}, {y}): {str(e)}")
+            print(f"Error clicking at coordinates: {str(e)}")
             return False
             
-    def swipe(self, start_x, start_y, end_x, end_y, duration=0.5):
+    def swipe(self, start_x, start_y, end_x, end_y):
         """
         Swipe from start coordinates to end coordinates.
         
@@ -179,48 +179,20 @@ class DeviceActions:
         time.sleep(seconds)
         print(f"Waited for {seconds} seconds")
         
-    def take_screenshot(self, output_path=None):
+    def take_screenshot(self, output_path: str) -> bool:
         """
-        Take a screenshot using ADB's exec-out screencap command.
+        Take a screenshot using uiautomator2 and save it to the specified path.
         
         Args:
-            output_path (str, optional): Path to save the screenshot.
-                If not provided, a timestamp-based filename will be used.
-                
+            output_path (str): Path where the screenshot should be saved
+    
         Returns:
-            bool: True if screenshot was successful, False otherwise.
+            bool: True if screenshot was successful, False otherwise
         """
-        import subprocess
-        
-        if output_path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = f"screenshot_{timestamp}.png"
-            
         try:
-            # Use the reliable ADB method for screenshots (1080x2400 resolution, 405 PPI)
-            command = ["adb", "exec-out", "screencap", "-p"]
-            if self.device_serial:
-                command.insert(1, "-s")
-                command.insert(2, self.device_serial)
-                
-            # Run command and capture output directly to file
-            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
-            if result.returncode != 0:
-                print(f"Screenshot failed: {result.stderr.decode()}")
-                return False
-                
-            # Write screenshot to file
-            with open(output_path, "wb") as f:
-                f.write(result.stdout)
-                
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                print(f"Screenshot saved to {output_path}")
-                return True
-            else:
-                print("Screenshot file is empty or not created")
-                return False
-                
+            # Use uiautomator2's screenshot method
+            self.device.screenshot(output_path)
+            return os.path.exists(output_path) and os.path.getsize(output_path) > 0
         except Exception as e:
             print(f"Error taking screenshot: {str(e)}")
             return False
@@ -255,9 +227,10 @@ if __name__ == "__main__":
     device = DeviceActions()
     
     # Take a screenshot
-    screenshot_path = device.take_screenshot()
+    screenshot_path = "screenshot.png"
+    device.take_screenshot(screenshot_path)
     
-    if screenshot_path:
+    if os.path.exists(screenshot_path) and os.path.getsize(screenshot_path) > 0:
         # Example: Click at coordinates (500, 500)
         device.click(500, 500)
         
