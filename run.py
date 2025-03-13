@@ -28,6 +28,15 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise ValueError("OPENAI_API_KEY environment variable is required")
 
+import os
+from uuid import uuid4
+
+unique_id = uuid4().hex[0:8]
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_PROJECT"] = f"Tracing Walkthrough - {unique_id}"
+os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+os.environ["LANGCHAIN_API_KEY"] = os.environ.get("LANGSMITH_API_KEY")
+
 # Initialize device and screenshot analyzer (assumes these classes are implemented)
 device = DeviceActions()
 screenshot_analyzer = ScreenshotAnalyzer()
