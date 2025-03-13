@@ -10,7 +10,7 @@ from typing import Literal, List
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
-# Local modules and previously defined agents/tools
+# Local modules and previously defined agents/tools.invoke
 from langgraph.graph import StateGraph, END, START
 from langchain_core.tools import tool, Tool
 from langgraph.prebuilt import create_react_agent
@@ -37,14 +37,13 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
 # Define tools for the agents
 @tool
-def take_screenshot(output_path: str = None) -> str:
+def take_screenshot() -> str:
     """Take a screenshot of the Android device's current screen using ADB. Let the output path be a simple time stamp"""
     print("\n=== Taking Screenshot ===")
 
-    if output_path is None:
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"screenshot_{timestamp}.png"
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = f"screenshot_{timestamp}.png"
     print(f"Screenshot output path: {output_path}")
 
     try:
@@ -81,7 +80,7 @@ def analyze_screenshot(screenshot_path: str) -> str:
         print(f"Error: {error_msg}")
         return error_msg
 
-    print("Applying 7mm touch-size grid overlay (based on 405 PPI)")
+    print("Applying touch-size grid overlay (based on 405 PPI)")
     grid_screenshot = screenshot_analyzer.apply_grid_to_screenshot(screenshot_path)
     print(f"Grid overlay applied: {grid_screenshot}")
 
@@ -111,11 +110,7 @@ def click_grid(grid_number: int) -> str:
     print(f"Screen bounds: 1080x2400")  # Known device resolution
     
     # Initialize GridOverlay with the device's specifications
-    grid_overlay = GridOverlay(
-        finger_touch_size_mm=7,
-        ppi=405,
-        screen_resolution=(1080, 2400)
-    )
+    grid_overlay = GridOverlay()
     
     # Convert grid number to screen coordinates
     try:
@@ -138,30 +133,26 @@ def click_grid(grid_number: int) -> str:
         print(f"Error: {error_msg}")
         return error_msg
 
-# @tool
-# def swipe_on_screen(start_x: int, start_y: int, end_x: int, end_y: int, duration: float = 0.5) -> str:
-#     """Swipe from start coordinates to end coordinates on the screen."""
-#     print(f"\n=== Swiping from ({start_x}, {start_y}) to ({end_x}, {end_y}) ===")
-#     print(f"Screen bounds: 1080x2400")  # Known device resolution
-#     print(f"Swipe duration: {duration}s")
-    
-#     # Validate coordinates
-#     if not (0 <= start_x <= 1080 and 0 <= start_y <= 2400 and 
-#             0 <= end_x <= 1080 and 0 <= end_y <= 2400):
-#         error_msg = f"Coordinates out of bounds for 1080x2400 screen"
-#         print(f"Error: {error_msg}")
-#         return error_msg
-        
-#     print("Executing swipe command...")
-#     success = device.swipe(start_x, start_y, end_x, end_y, duration=duration)
-    
-#     if success:
-#         print("Swipe action successful")
-#         return f"Swiped from ({start_x}, {start_y}) to ({end_x}, {end_y})."
-#     else:
-#         error_msg = f"Failed to swipe from ({start_x}, {start_y}) to ({end_x}, {end_y})."
-#         print(f"Error: {error_msg}")
-#         return error_msg
+@tool
+def scroll_up() -> str:
+    """Scroll up on the device screen."""
+    if device.scroll_up():
+        return "Successfully scrolled up"
+    return "Failed to scroll up"
+
+@tool
+def swipe_left() -> str:
+    """Swipe left on the device screen."""
+    if device.swipe_left():
+        return "Successfully swiped left"
+    return "Failed to swipe left"
+
+@tool
+def swipe_right() -> str:
+    """Swipe right on the device screen."""
+    if device.swipe_right():
+        return "Successfully swiped right"
+    return "Failed to swipe right"
 
 @tool
 def input_text(text: str) -> str:
@@ -233,11 +224,27 @@ action_agent = create_react_agent(
     take_screenshot,
     analyze_screenshot,
     click_grid,
-    # swipe_on_screen,
+    scroll_up,
+    swipe_left,
+    swipe_right,
     ask_human_for_help,
     ],
     prompt="""
-You are an Action Agent for Android devices. You will analyse what action to be perfomed choose approperite grid and clicks grid. If not certain , you call ask_human_for_help
+You are an Action Agent specialized in executing tasks on Android devices. Your primary objective is to perform the given action no matter what, using all available interactions.
+
+Your Capabilities:
+You can tap, swipe (left, right, up, down), scroll, type, press buttons, and navigate back.
+If an element is not visible, you scroll to find it before taking action.
+You can handle multi-step interactions, such as opening menus, navigating back, or retrying failed actions.
+If you encounter ambiguity or an issue, you can involve a human for clarification.
+Your Ultimate Goal:
+Execute the requested action with maximum efficiency and accuracy.
+Ensure task completion even if it requires retries, adjustments, or alternative paths.
+Constraints:
+Do not stop unless the task is impossible after all options are exhausted.
+Always prioritize efficiency and accuracy in interactions.
+If your action didn't work, retry again differently. 
+During click, always prefer clicking on icons.
 """,
     name="action_agent"
 )
@@ -248,7 +255,9 @@ validation_agent = create_react_agent(
     tools=[
     take_screenshot,
     analyze_screenshot,
-    # swipe_on_screen,
+    scroll_up,
+    swipe_left,
+    swipe_right,
     ask_human_for_help,
     ],
     prompt="""
@@ -292,11 +301,11 @@ def run_supervisor(task_description: str):
     }
     
     # Invoke the supervisor workflow
-    result = compiled_supervisor.invoke(initial_input)
+    result = compiled_supervisor.invoke(initial_input , {"recursion_limit": 50})
     print("\n=== Supervisor Result ===")
     print(json.dumps(result, indent=2, default=lambda o: o.__dict__))
 
 if __name__ == "__main__":
     # Example: Automate opening the settings app and validating the settings screen.
-    task = "Open Whatsapp, go to calls from the bottom right , call the second person on the list. If the calls successfully dails that it is success"
+    task = "Open Whatsapp, go to calls from the bottom right , call the second person on the list. If the calls successfully dials that it is success"
     run_supervisor(task)

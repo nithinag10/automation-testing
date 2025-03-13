@@ -51,8 +51,8 @@ class ScreenshotAnalyzer:
     adding a grid overlay, and extracting text using Gemini 2.0 Flash multimodal model.
     """
     
-    def __init__(self, device_serial=None, finger_touch_size_mm=7, ppi=405, screen_resolution=(1080, 2400)):
-        """
+    def __init__(self, device_serial=None):
+        """xw
         Initialize the ScreenshotAnalyzer.
         
         Args:
@@ -76,11 +76,7 @@ class ScreenshotAnalyzer:
                 print(f"Warning: Failed to connect to device: {str(e)}")
         
         # Set up grid overlay
-        self.grid_overlay = GridOverlay(
-            finger_touch_size_mm=finger_touch_size_mm,
-            ppi=ppi,
-            screen_resolution=screen_resolution
-        )
+        self.grid_overlay = GridOverlay()
         
         # Set up Gemini API
         self.genai_client = None
@@ -107,13 +103,15 @@ class ScreenshotAnalyzer:
             print(f"Error setting up Google Generative AI: {str(e)}")
             self.genai_client = None
             
-    def take_screenshot(self, output_path=None):
+    def take_screenshot(self):
         """
-        Take a screenshot using UIAutomator2.
+        Take a screenshot using UIAutomator2. Always save with file in this formate : screenshot.png
         
         Args:
             output_path (str, optional): Path to save the screenshot.
                 If not provided, a timestamp-based filename will be used.
+                Always save with .png format
+                don't store it in a directoy
                 
         Returns:
             str: Path to the saved screenshot, or None if failed.
@@ -122,9 +120,8 @@ class ScreenshotAnalyzer:
             print("UI Automator not available. Cannot take screenshot.")
             return None
             
-        if output_path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = f"screenshot_{timestamp}.png"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"screenshot_{timestamp}.png"
             
         try:
             # Take screenshot using UIAutomator2
@@ -182,21 +179,22 @@ class ScreenshotAnalyzer:
                 model='gemini-2.0-flash',
                 contents=[
                     """
-Role:
-You are an expert screen reader specializing in translating mobile phone screenshots into highly detailed text descriptions for blind users. Your primary skill is accurately identifying and explaining all visible elements while associating them with the correct grid number to help users navigate the screen effectively.
+                Role:
+                You are an expert screen reader specializing in translating mobile phone screenshots into highly detailed text descriptions for blind users. Your primary skill is accurately identifying and explaining all visible elements while associating them with the correct grid number to help users navigate the screen effectively.
 
-Task:
-Given a mobile phone screenshot that includes grid numbers, your job is to extract and describe every visible detail on the screen. Each element must be paired with its corresponding grid number so that blind users can precisely identify its location.
+                Task:
+                Given a mobile phone screenshot that includes grid numbers, your job is to extract and describe every visible detail on the screen. Each element must be paired with its corresponding grid number so that blind users can precisely identify its location.
 
-What Are grid numbers?
-Its already present on the screenshot.
-Each grid number represents a specific area of the screen where users can interact.
+                What Are grid numbers?
+                Its already present on the screenshot.
+                Each grid number represents a specific area of the screen where users can interact.
 
-Requirements:
-Explain everything on the screen, including text, buttons, icons, images, and any minor details, no matter how small.
-After each explanation, tell the grid number visible on the screenshot in those small grids that you are referring to.
-Ensure clarity and organization to maximize usability.
-Use a structured format to make it easy for blind users to understand and navigate the screen.
+                Requirements:
+                Explain everything on the screen, including text, buttons, icons, images, and any minor details, no matter how small.
+                After each explanation, tell the grid number that is right on the element you are referring (can be icon, text, button, image, etc) as close as possible and that is visible on the screenshot in those small grids that you are referring to.
+                Ensure clarity and organization to maximize usability.
+                Use a structured format to make it easy for blind users to understand and navigate the screen.
+                Also clearly expalin the bottom navigation buttons, recent tabs, home button and back button. 
 
 """,
                     img
@@ -205,6 +203,7 @@ Use a structured format to make it easy for blind users to understand and naviga
             
             # Get the extracted text
             extracted_text = response.text.strip()
+            print("Pritning extarcted text", extracted_text)
             return extracted_text
                 
         except Exception as e:

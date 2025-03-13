@@ -220,6 +220,66 @@ class DeviceActions:
         except Exception as e:
             print(f"Error long clicking at coordinates ({x}, {y}): {str(e)}")
             return False
+            
+    def scroll_up(self):
+        """
+        Scroll up on the device screen using ADB shell swipe command.
+        
+        Returns:
+            bool: True if scroll was successful, False otherwise
+        """
+        if self.device is None:
+            print("No device connected")
+            return False
+            
+        try:
+            # Scroll up from bottom to top
+            self.device.shell('input swipe 540 2000 540 500 200')
+            print("Scrolled up")
+            return True
+        except Exception as e:
+            print(f"Error scrolling up: {str(e)}")
+            return False
+
+    def swipe_left(self):
+        """
+        Swipe left on the device screen using ADB shell swipe command.
+        
+        Returns:
+            bool: True if swipe was successful, False otherwise
+        """
+        if self.device is None:
+            print("No device connected")
+            return False
+            
+        try:
+            # Swipe from right to left
+            self.device.shell('input swipe 900 1200 100 1200 200')
+            print("Swiped left")
+            return True
+        except Exception as e:
+            print(f"Error swiping left: {str(e)}")
+            return False
+
+    def swipe_right(self):
+        """
+        Swipe right on the device screen using ADB shell swipe command.
+        
+        Returns:
+            bool: True if swipe was successful, False otherwise
+        """
+        if self.device is None:
+            print("No device connected")
+            return False
+            
+        try:
+            # Swipe from left to right
+            self.device.shell('input swipe 100 1200 900 1200 200')
+            print("Swiped right")
+            return True
+        except Exception as e:
+            print(f"Error swiping right: {str(e)}")
+            return False
 
 
 if __name__ == "__main__":

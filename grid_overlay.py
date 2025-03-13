@@ -18,7 +18,7 @@ class GridOverlay:
     specific areas on a screenshot for reference or automation purposes.
     """
     
-    def __init__(self, finger_touch_size_mm=7, ppi=405, screen_resolution=(1080, 2400)):
+    def __init__(self, finger_touch_size_mm=4, ppi=405, screen_resolution=(1080, 2400)):
         """
         Initialize the GridOverlay class.
         
@@ -48,16 +48,9 @@ class GridOverlay:
         self.overlay_color = (255, 255, 255, 60)  # White with much lower opacity (60/255)
         
     def set_ppi(self, ppi):
-        """
-        Set the PPI value and recalculate the finger size in pixels.
-        
-        Args:
-            ppi (int): Pixels per inch value of the target device.
-        """
         self.ppi = ppi
-        self.finger_size_pixels = int((9 / 25.4) * self.ppi)
         self.font_size = int(self.finger_size_pixels / 3)
-        
+            
     def set_screen_resolution(self, width, height):
         """
         Set the screen resolution of the target device.
@@ -177,7 +170,7 @@ class GridOverlay:
             
         return processed_paths
 
-    def get_coordinates_for_grid(self, grid_number, image_width=None, image_height=None):
+    def get_coordinates_for_grid(self, grid_number, image_width=1080, image_height=2400):
         """
         Calculate the center coordinates (x, y) for a given grid number based on image/screen dimensions.
         
@@ -194,11 +187,6 @@ class GridOverlay:
         Raises:
             ValueError: If grid_number is out of valid range for the given dimensions.
         """
-        # Use screen resolution if image dimensions not provided
-        if image_width is None:
-            image_width = self.screen_resolution[0]
-        if image_height is None:
-            image_height = self.screen_resolution[1]
                 
         cols = math.ceil(image_width / self.finger_size_pixels)
         rows = math.ceil(image_height / self.finger_size_pixels)
@@ -262,14 +250,14 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         image_path = sys.argv[1]
         # Create a grid overlay with default settings for a modern Android device (405 PPI)
-        grid = GridOverlay(ppi=405, screen_resolution=(1080, 2400))
+        grid = GridOverlay()
         output_path = grid.apply_grid_to_image(image_path)
         print(f"Grid overlay applied. Output saved to: {output_path}")
         
         # Example of getting coordinates for grid number 42
         try:
-            x, y = grid.get_coordinates_for_grid(77)
-            print(f"Coordinates for grid #77: ({x}, {y})")
+            x, y = grid.get_coordinates_for_grid(276)
+            print(f"Coordinates for grid #262: ({x}, {y})")
         except ValueError as e:
             print(f"Note: {e}")
     else:
