@@ -20,7 +20,6 @@ from langchain_core.tools import tool, Tool
 from langgraph.prebuilt import create_react_agent
 from langgraph_supervisor import create_supervisor
 
-
 # Local modules
 from device_actions import DeviceActions
 from screenshot_analyzer import ScreenshotAnalyzer
@@ -209,26 +208,31 @@ def input_text(text: str) -> str:
 
 
 @tool
-def verify_screen_elements(items_to_verify: List[str]) -> str:
+def match_screen_with_description(expected_screen_description: str) -> str:
     """
-    Verify if specific elements or content are present on the current screen.
+    Check if the current screen matches the provided description.
+    
+    This tool captures the current screen and analyzes whether it matches the expected description.
+    It compares what is actually displayed on the screen with what should be displayed according
+    to the description.
     
     Args:
-        items_to_verify (List[str]): List of elements/content to verify, e.g. ["Facebook logo", "News Feed", "Like button"]
+        expected_screen_description (str): A detailed description of what the screen should look like.
+                                          Example: "WhatsApp home screen with chat list visible and search bar at the top"
     
     Returns:
-        str: Verification results formatted as a readable report
+        str: Analysis report detailing whether the screen matches the expected description
     """
-    print(f"\n=== Verifying Screen Elements ===")
-    print(f"Items to verify: {items_to_verify}")
+    print(f"\n=== Matching Screen Against Description ===")
+    print(f"Expected screen: {expected_screen_description}")
     
-    if not items_to_verify:
-        error_msg = "No verification items provided"
+    if not expected_screen_description:
+        error_msg = "No screen description provided"
         print(f"Error: {error_msg}")
         return error_msg
     
     try:
-        # Take a new screenshot first
+        # Take a new screenshot
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = f"screenshot_{timestamp}.png"
         success = device.take_screenshot(output_path)
@@ -238,48 +242,47 @@ def verify_screen_elements(items_to_verify: List[str]) -> str:
             print(f"Error: {error_msg}")
             return error_msg
         
-        # Apply grid overlay
-        grid_path = screenshot_analyzer.apply_grid_to_screenshot(output_path)
+    
+        # Verify the screen matches the description
+        verification_results = screenshot_analyzer.verify_screen_content(output_path, [expected_screen_description])
         
-        # Verify the elements
-        verification_results = screenshot_analyzer.verify_screen_content(grid_path, items_to_verify)
+        # Get the analysis text
+        analysis_text = verification_results.get("screenshot_analysis", "No analysis available")
         
         # Format the results as a readable report
-        report = ["=== Screen Verification Report ==="]
-        report.append(f"Total items checked: {len(items_to_verify)}")
+        report = ["=== Screen Match Analysis Report ==="]
+        report.append(f"Screen captured at: {timestamp}")
         
-        # Add overall verification result
-        if verification_results.get("verified", False):
-            report.append("✅ OVERALL RESULT: All items were found on the screen")
+        # Determine if the screen matches the description
+        if "not match" in analysis_text.lower() or "doesn't match" in analysis_text.lower() or "does not match" in analysis_text.lower():
+            report.append("❌ RESULT: Screen does not match the expected description")
+            match_status = False
         else:
-            report.append("❌ OVERALL RESULT: Some items were not found on the screen")
+            report.append("✅ RESULT: Screen appears to match the expected description")
+            match_status = True
         
-        # Add detailed results for each item
-        report.append("\n=== Detailed Results ===")
-        for item_result in verification_results.get("items", []):
-            item_name = item_result.get("item", "Unknown item")
-            found = item_result.get("found", False)
-            location = item_result.get("location", "Unknown")
-            confidence = item_result.get("confidence", 0)
-            
-            status = "✅ FOUND" if found else "❌ NOT FOUND"
-            report.append(f"\n{status}: {item_name}")
-            report.append(f"  Confidence: {confidence:.2f}")
-            
-            if found and location:
-                report.append(f"  Location: Grid {location}")
-            
-            details = item_result.get("details", "").strip()
-            if details:
-                report.append(f"  Details: {details}")
+        # Add the detailed analysis
+        report.append("\n=== Expected Screen Description ===")
+        report.append(expected_screen_description)
+        
+        report.append("\n=== Actual Screen Analysis ===")
+        report.append(analysis_text)
+        
+        # Add a conclusion
+        report.append("\n=== Conclusion ===")
+        if match_status:
+            report.append("The screen appears to match the expected description.")
+        else:
+            report.append("The screen does not match the expected description.")
+            report.append("Key differences may include missing elements or different layout.")
         
         # Return the formatted report
         formatted_report = "\n".join(report)
-        print("Verification completed")
+        print("Screen matching completed")
         return formatted_report
         
     except Exception as e:
-        error_msg = f"Error during screen verification: {str(e)}"
+        error_msg = f"Error during screen matching: {str(e)}"
         print(f"Exception: {error_msg}")
         return error_msg
 
@@ -444,17 +447,12 @@ interaction_tools = [
     get_screen_data,
     click_grid,
     perform_gesture,
-    press_system_key,
-    inform_activity,
-    application_workflow,
-    verify_screen_elements
+    press_system_key
 ]
 
 validation_tools = [
-    get_screen_data,
     perform_gesture,
-    ask_human_for_help,
-    verify_screen_elements
+    match_screen_with_description
 ]
 
 # Action Agent: performs UI interactions
@@ -507,11 +505,11 @@ supervisor_workflow = create_supervisor(
         "You are a supervisor managing Android automation tasks. "
         "You have two experts: an action agent that performs UI interactions and a validation agent that confirms the results. "
         "Direct the agents to complete the user's automation request. "
-        "Once all steps are verified, respond with FINISH and a summary of the actions taken."
         "Before executing, analyze the user's automation request and create a structured execution plan. Break down the request into clear, step-by-step instructions, specifying actions and expected validation points."
-        "Ask for human help if something you are stuck at"
-    ),
-    output_mode="full_history",
+        "Once all steps are verified, respond with FINISH and a summary of the actions taken."
+        "Ask for human help if you need feel you are stuck or confused what to do"
+        "Don't Overwhelme agents by giving all the instruction, break and give clear , complete instructions"
+    )
 )
 
 def log_state(state):

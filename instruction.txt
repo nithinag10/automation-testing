@@ -1,2 +1,3 @@
-open whatsapp 
-video call nikhil
+1. open whatsapp 
+2. book a hotel
+3. go to the first floor and bring dosa.

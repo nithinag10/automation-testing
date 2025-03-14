@@ -277,56 +277,54 @@ class ScreenshotAnalyzer:
             
     def verify_screen_content(self, image_path, verification_items):
         """
-        Verify if specific items/elements are present on the screen.
+        Analyze if a screenshot matches the provided description.
         
         Args:
-            image_path (str): Path to the screenshot image to verify
-            verification_items (list): List of items/elements to verify on the screen
-                Each item should be a string describing what to look for
+            image_path (str): Path to the screenshot image to analyze
+            verification_items (list): List containing a single description of what the screen should look like
                 
         Returns:
             dict: Dictionary with verification results
                 {
-                    "verified": bool - Overall verification result (True if all items found),
-                    "items": [
-                        {
-                            "item": str - The item that was checked,
-                            "found": bool - Whether the item was found,
-                            "confidence": float - Confidence score (0-1),
-                            "location": str - Grid location if found (or None),
-                            "details": str - Additional details about the item
-                        }
-                    ],
-                    "screenshot_analysis": str - Full text analysis of the screenshot
+                    "verified": bool - Whether the screen matches the description,
+                    "screenshot_analysis": str - Full analysis comparing the screen to the description
                 }
         """
         if not GENAI_AVAILABLE:
             print("Google Generative AI SDK not available (import failed).")
-            return {"verified": False, "items": [], "error": "Gemini API not available"}
+            return {"verified": False, "error": "Gemini API not available"}
             
         if not self.genai_client:
             print("Google Generative AI client not initialized.")
-            return {"verified": False, "items": [], "error": "Gemini client not initialized"}
+            return {"verified": False, "error": "Gemini client not initialized"}
             
         try:
+            # log image path what you are analysis
+            print(f"Analyzing screen in image: {image_path}")
             # Open image with PIL
             img = Image.open(image_path)
             
-            # Create a prompt that asks for verification of specific elements
+            # Get the description (should be a single item in the list)
+            description = verification_items[0] if verification_items else "Unknown"
+            
+            # Create a prompt that asks for comparison between screen and description
             verification_prompt = f"""
             Role:
-            You are a specialized mobile screen verification agent. Your task is to analyze a screenshot and verify if specific elements are present on the screen.
+            You are a specialized mobile screen analysis agent. Your task is to analyze a screenshot and determine if it matches a given description.
             
             Task:
-            Given the following list of items to verify, carefully analyze the screenshot and determine if each item is present. For each item, provide:
-            1. Whether the item is found (yes/no)
-            2. A confidence score between 0 and 1
-            4. Any additional details that might be helpful for verification
+            I will provide you with a description of what a mobile screen should look like. Carefully analyze the screenshot and determine if it matches this description.
             
-            Items to verify:
-            {', '.join(verification_items)}
+            Expected screen description:
+            "{description}"
             
-            Format your response as a structured verification report with one section per item.
+            In your analysis:
+            1. Describe what you actually see in the screenshot
+            2. Compare it point by point with the expected description
+            3. Provide a clear conclusion on whether the screen matches the description
+            4. If it doesn't match, explain the key differences
+            
+            Be thorough but concise in your analysis.
             """
             
             # Generate content with Gemini 2.0 Flash
@@ -338,91 +336,30 @@ class ScreenshotAnalyzer:
             # Get the analysis text
             analysis_text = response.text.strip()
             
-            # First, get a standard screen description for context
-            screen_description = self.extract_text_with_gemini(image_path)
+            # Determine if the screen matches the description based on the analysis
+            matches = True
+            if ("not match" in analysis_text.lower() or 
+                "doesn't match" in analysis_text.lower() or 
+                "does not match" in analysis_text.lower() or
+                "different from" in analysis_text.lower() or
+                "missing" in analysis_text.lower()):
+                matches = False
             
-            # Parse the verification results
+            # Create the verification results
             verification_results = {
-                "verified": True,  # Will be set to False if any item is not found
-                "items": [],
-                "screenshot_analysis": screen_description
+                "verified": matches,
+                "screenshot_analysis": analysis_text
             }
-            
-            # Process each verification item
-            for item in verification_items:
-                # Very simple parsing - in a real implementation, this would be more sophisticated
-                # and would properly parse the structured response from the model
-                found = "not found" not in analysis_text.lower() and item.lower() in analysis_text.lower()
-                
-                # If any item is not found, overall verification is false
-                if not found:
-                    verification_results["verified"] = False
-                
-                # Extract relevant portion of the analysis for this item
-                item_details = ""
-                lines = analysis_text.split("\n")
-                for i, line in enumerate(lines):
-                    if item.lower() in line.lower():
-                        # Take this line and a few after it as the item details
-                        item_details = "\n".join(lines[i:i+5])
-                        break
-                        
-                # Try to extract grid location from details
-                location = None
-                if "grid" in item_details.lower():
-                    for word in item_details.split():
-                        if word.isdigit() and "grid" in item_details.lower().split(word)[0][-10:]:
-                            location = word
-                            break
-                
-                # Add the verification result for this item
-                verification_results["items"].append({
-                    "item": item,
-                    "found": found,
-                    "confidence": 0.9 if found else 0.1,  # Simplified confidence score
-                    "location": location,
-                    "details": item_details if item_details else "No specific details found"
-                })
-            
-            print(f"Verification completed for {len(verification_items)} items")
+
             return verification_results
                 
         except Exception as e:
-            print(f"Error verifying screen content: {str(e)}")
+            print(f"Error analyzing screen: {str(e)}")
             return {
                 "verified": False, 
-                "items": [], 
                 "error": str(e)
             }
-            
-    def verify_screen_elements(self, verification_items, take_new_screenshot=True):
-        """
-        Convenience method to take a screenshot and verify elements in one step.
-        
-        Args:
-            verification_items (list): List of elements to verify
-            take_new_screenshot (bool): Whether to take a new screenshot (True) or use the last one (False)
-            
-        Returns:
-            dict: Verification results
-        """
-        # Step 1: Get a screenshot (either new or existing)
-        if take_new_screenshot:
-            screenshot_path = self.take_screenshot()
-            if not screenshot_path:
-                return {"verified": False, "items": [], "error": "Failed to take screenshot"}
-        else:
-            # Use the most recent screenshot file
-            screenshot_files = [f for f in os.listdir('.') if f.startswith('screenshot_') and f.endswith('.png')]
-            if not screenshot_files:
-                return {"verified": False, "items": [], "error": "No existing screenshots found"}
-            screenshot_path = sorted(screenshot_files)[-1]  # Get the most recent one
-            
-        # Step 2: Apply grid overlay
-        grid_path = self.apply_grid_to_screenshot(screenshot_path)
-        
-        # Step 3: Verify content
-        return self.verify_screen_content(grid_path, verification_items)
+
 
 if __name__ == "__main__":
     # Example usage
