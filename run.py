@@ -267,6 +267,9 @@ def match_screen_with_description(expected_screen_description: str) -> str:
         
         report.append("\n=== Actual Screen Analysis ===")
         report.append(analysis_text)
+
+        # print the report
+        print("\n".join(report))
         
         # Add a conclusion
         report.append("\n=== Conclusion ===")
@@ -447,7 +450,10 @@ interaction_tools = [
     get_screen_data,
     click_grid,
     perform_gesture,
-    press_system_key
+    press_system_key,
+    input_text,
+    inform_activity,
+    application_workflow
 ]
 
 validation_tools = [
@@ -459,6 +465,7 @@ validation_tools = [
 action_agent = create_react_agent(
     llm,
     tools=interaction_tools,
+    memory=action_agent_memory,
     prompt="""
 You are an Action Agent specialized in executing tasks on Android devices. Your primary objective is to perform the given action no matter what, using all available interactions.
 
@@ -488,6 +495,10 @@ validation_agent = create_react_agent(
     prompt="""
 You are a Validation Agent for Android devices. Your job is to verify that UI actions have succeeded.
 Always begin by using get_screen_data to inspect the current state and confirm whether the expected changes occurred.
+If the expected state is not observed, report what's actually visible and whether that meets the requirements.
+You can also use match_screen_with_description to verify if the current screen matches what is expected.
+
+Be thorough and precise with your observations, reporting exactly what you see.
 """,
     name="validation_agent"
 )
