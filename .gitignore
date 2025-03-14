@@ -21,3 +21,8 @@ temp_*
 Thumbs.db
 
 .env
+
+
+results/*
+
+activity_logs/*

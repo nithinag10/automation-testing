@@ -385,7 +385,7 @@ def inform_activity(screen_name: str, action_description: str) -> str:
         "screen": screen_name,
         "action": action_description
     }
-    
+
     # Append to log file
     with open(log_file, "a") as f:
         f.write(json.dumps(log_entry) + "\n")
@@ -402,12 +402,16 @@ def application_workflow() -> str:
     """
     Retrieves all recorded activities from the application's activity logs and past human helps. 
 
+    If you have multiways to a task refer workflow to understand better and choose better. 
+    If you not clear with the task given to you, refer workflow to understan better. 
+
     This tool pulls the complete history of screens visited and actions performed
     by the agent, providing a full workflow trace of the application's usage.
     
     Returns:
         str: JSON string containing all logged activities in chronological order
     """
+    
     log_file = os.path.join("activity_logs", "agent_activity_log.jsonl")
     
     # Check if log file exists
@@ -436,7 +440,9 @@ def application_workflow() -> str:
         "total_activities": len(activities),
         "workflow": activities
     }
-    
+
+    print("Printing old knowledge")
+
     return json.dumps(result, indent=2)
 
 
@@ -465,25 +471,35 @@ validation_tools = [
 action_agent = create_react_agent(
     llm,
     tools=interaction_tools,
-    memory=action_agent_memory,
     prompt="""
-You are an Action Agent specialized in executing tasks on Android devices. Your primary objective is to perform the given action no matter what, using all available interactions.
+You are an Action Agent specialized in executing tasks on Android devices using a **ReAct (Reasoning + Acting)** approach. Your primary objective is to analyze the situation, reason about the best course of action, and then execute the necessary steps efficiently.
 
-Your Capabilities:
-You can analyze screens, tap on elements, perform gestures (scroll up, swipe left/right), type text, press system buttons, and navigate back.
-Use get_screen_data to capture and analyze the current screen in a single step.
-Use perform_gesture with the gesture type (e.g., "scroll_up", "swipe_left", "swipe_right") to navigate.
-If an element is not visible, use perform_gesture to find it before taking action.
-You can handle multi-step interactions, such as opening menus, navigating back, or retrying failed actions.
-If you encounter ambiguity or an issue, use old application workflow to understand better. 
-Your Ultimate Goal:
-Execute the requested action with maximum efficiency and accuracy.
-Ensure task completion even if it requires retries, adjustments, or alternative paths.
-Constraints:
-Do not stop unless the task is impossible after all options are exhausted.
-Always prioritize efficiency and accuracy in interactions.
-If your action didn't work, retry again differently. 
-During click, always prefer clicking on icons.
+### **ReAct-Based Workflow**  
+For every task, follow this structured approach:  
+1. **Observe** – Capture the screen state using `get_screen_data` and analyze full screen completely include all elements.
+2. **Reason** – Based on the screen data:
+   - Determine the best way to perform the task.
+   - Also determine the second best way to perform the task thinking the first way is not possible.
+   - let a = confidence_score(your_best_way)
+   - let b = confidence_score(your_second_best_way)
+   - if a and b values are too close. Use application_workflow knowledge for better reasoning. 
+   - if a and b are too low, again use application_workflow knowledge for better reasoning. 
+   - if still a and b are too low, ask supervisor for help
+
+3. **Act** – Execute interactions step by step:
+   - Tap on elements, perform gestures (`scroll_up`, `swipe_left`, etc.), type text, or press system buttons.
+   - If an element is not visible, use gestures to find it before interacting.
+   - If an action fails, retry using an alternative approach.  
+
+4. **Verify** – After each action, confirm if the expected result was achieved.
+   - If unsuccessful, adjust the approach and try again.
+   - If the task is impossible after exhausting all options, report failure.  
+
+### **Constraints**  
+- **Never stop** unless all possible interactions have been tried and failed.  
+- **Prioritize efficiency and accuracy** in every step.  
+- **Prefer clicking on icons** over text elements whenever possible.
+
 """,
     name="action_agent"
 )
@@ -518,8 +534,7 @@ supervisor_workflow = create_supervisor(
         "Direct the agents to complete the user's automation request. "
         "Before executing, analyze the user's automation request and create a structured execution plan. Break down the request into clear, step-by-step instructions, specifying actions and expected validation points."
         "Once all steps are verified, respond with FINISH and a summary of the actions taken."
-        "Ask for human help if you need feel you are stuck or confused what to do"
-        "Don't Overwhelme agents by giving all the instruction, break and give clear , complete instructions"
+        "Ask for human help if you need feel you are stuck or confused what to do."
     )
 )
 
@@ -580,9 +595,10 @@ def run_supervisor(task_description: str):
     # Create or append to the activity log file with simplified output
     log_file = os.path.join(log_dir, "agent_activity_log.jsonl")
     
-    with open(log_file, "w") as f:
+    with open(log_file, "a") as f:
         f.write(f"AUTOMATION TASK: {task_description}\n")
         f.write(f"COMPLETED AT: {datetime.datetime.now().isoformat()}\n")
+        f.write("=======================================================\n")
 
     print(f"Automation task completed and logged to {log_file}")
     return result
