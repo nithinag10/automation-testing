@@ -6,7 +6,6 @@ Multi-Agent LangGraph Supervisor for Android Automation
 # =============================================================================
 # IMPORTS AND CONFIGURATION
 # =============================================================================
-from ast import Store
 import os
 import json
 import datetime
@@ -202,10 +201,86 @@ def input_text(text: str) -> str:
     
     if success:
         print("Text input successful")
-        return f"Input text: {text}"
+        return f"Successfully input text: '{text}'"
     else:
-        error_msg = f"Failed to input text: {text}"
+        error_msg = f"Failed to input text: '{text}'"
         print(f"Error: {error_msg}")
+        return error_msg
+
+
+@tool
+def verify_screen_elements(items_to_verify: List[str]) -> str:
+    """
+    Verify if specific elements or content are present on the current screen.
+    
+    Args:
+        items_to_verify (List[str]): List of elements/content to verify, e.g. ["Facebook logo", "News Feed", "Like button"]
+    
+    Returns:
+        str: Verification results formatted as a readable report
+    """
+    print(f"\n=== Verifying Screen Elements ===")
+    print(f"Items to verify: {items_to_verify}")
+    
+    if not items_to_verify:
+        error_msg = "No verification items provided"
+        print(f"Error: {error_msg}")
+        return error_msg
+    
+    try:
+        # Take a new screenshot first
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = f"screenshot_{timestamp}.png"
+        success = device.take_screenshot(output_path)
+        
+        if not success:
+            error_msg = "Failed to take screenshot for verification"
+            print(f"Error: {error_msg}")
+            return error_msg
+        
+        # Apply grid overlay
+        grid_path = screenshot_analyzer.apply_grid_to_screenshot(output_path)
+        
+        # Verify the elements
+        verification_results = screenshot_analyzer.verify_screen_content(grid_path, items_to_verify)
+        
+        # Format the results as a readable report
+        report = ["=== Screen Verification Report ==="]
+        report.append(f"Total items checked: {len(items_to_verify)}")
+        
+        # Add overall verification result
+        if verification_results.get("verified", False):
+            report.append("✅ OVERALL RESULT: All items were found on the screen")
+        else:
+            report.append("❌ OVERALL RESULT: Some items were not found on the screen")
+        
+        # Add detailed results for each item
+        report.append("\n=== Detailed Results ===")
+        for item_result in verification_results.get("items", []):
+            item_name = item_result.get("item", "Unknown item")
+            found = item_result.get("found", False)
+            location = item_result.get("location", "Unknown")
+            confidence = item_result.get("confidence", 0)
+            
+            status = "✅ FOUND" if found else "❌ NOT FOUND"
+            report.append(f"\n{status}: {item_name}")
+            report.append(f"  Confidence: {confidence:.2f}")
+            
+            if found and location:
+                report.append(f"  Location: Grid {location}")
+            
+            details = item_result.get("details", "").strip()
+            if details:
+                report.append(f"  Details: {details}")
+        
+        # Return the formatted report
+        formatted_report = "\n".join(report)
+        print("Verification completed")
+        return formatted_report
+        
+    except Exception as e:
+        error_msg = f"Error during screen verification: {str(e)}"
+        print(f"Exception: {error_msg}")
         return error_msg
 
 
@@ -244,11 +319,35 @@ def press_system_key(key_name: str) -> str:
 
 
 @tool
-def ask_human_for_help(question: str) -> str:
-    """Ask the human for help or clarification."""
-    print(f"\n[Agent is asking for your help]: {question}")
-    user_input = input("Your response: ")
-    return f"Human response: {user_input}"
+def ask_human_for_help(query: str) -> str:
+    """Request human assistance and log the conversation. Use this when stuck or need clarification.
+    
+    Args:
+        query: The specific question/request for the human
+        
+    Returns:
+        str: Human's response
+    """
+    # Get human input
+    response = input(f"AGENT REQUEST: {query}\nYour response: ")
+    
+    # Log to activity log
+    log_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "type": "human_interaction",
+        "request": query,
+        "response": response
+    }
+    
+    try:
+        log_dir = "activity_logs"
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "agent_activity_log.jsonl"), "a") as f:
+            f.write(json.dumps(log_entry) + "\n")
+    except Exception as e:
+        print(f"Error logging human interaction: {e}")
+
+    return response
 
 
 @tool
@@ -260,7 +359,7 @@ def inform_activity(screen_name: str, action_description: str) -> str:
     understand what screen the agent is currently on and what action it's going to perform.
     
     Args:
-        screen_name (str): The name or description of the current screen
+        screen (str): The current screen you got from screen data
         action_description (str): Description of the action being performed
         
     Returns:
@@ -291,33 +390,77 @@ def inform_activity(screen_name: str, action_description: str) -> str:
     print(f"\n[ACTIVITY TRACKER] {accessibility_message}\n")
     return accessibility_message
 
+
+@tool
+def application_workflow() -> str:
+    """
+    Retrieves all recorded activities from the application's activity logs and past human helps. 
+
+    This tool pulls the complete history of screens visited and actions performed
+    by the agent, providing a full workflow trace of the application's usage.
+    
+    Returns:
+        str: JSON string containing all logged activities in chronological order
+    """
+    log_file = os.path.join("activity_logs", "agent_activity_log.jsonl")
+    
+    # Check if log file exists
+    if not os.path.exists(log_file):
+        return "No activity logs found."
+    
+    # Read all logs
+    activities = []
+    with open(log_file, "r") as f:
+        for line in f:
+            if line.strip():  # Skip empty lines
+                try:
+                    log_entry = json.loads(line)
+                    activities.append(log_entry)
+                except json.JSONDecodeError:
+                    continue  # Skip malformed entries
+    
+    # Sort activities by timestamp if needed
+    activities.sort(key=lambda x: x.get("timestamp", ""))
+    
+    if not activities:
+        return "Activity log exists but contains no entries."
+    
+    # Format the result
+    result = {
+        "total_activities": len(activities),
+        "workflow": activities
+    }
+    
+    return json.dumps(result, indent=2)
+
+
+
 # =============================================================================
 # AGENT DEFINITIONS
 # =============================================================================
 
 # Define tool sets for different agents
-action_tools = [
+interaction_tools = [
     get_screen_data,
     click_grid,
     perform_gesture,
+    press_system_key,
     inform_activity,
-    ask_human_for_help,
+    application_workflow,
+    verify_screen_elements
 ]
 
 validation_tools = [
     get_screen_data,
     perform_gesture,
     ask_human_for_help,
+    verify_screen_elements
 ]
-
-
-
-memory = InMemorySaver()
 
 # Action Agent: performs UI interactions
 action_agent = create_react_agent(
     llm,
-    tools=action_tools,
+    tools=interaction_tools,
     prompt="""
 You are an Action Agent specialized in executing tasks on Android devices. Your primary objective is to perform the given action no matter what, using all available interactions.
 
@@ -327,7 +470,7 @@ Use get_screen_data to capture and analyze the current screen in a single step.
 Use perform_gesture with the gesture type (e.g., "scroll_up", "swipe_left", "swipe_right") to navigate.
 If an element is not visible, use perform_gesture to find it before taking action.
 You can handle multi-step interactions, such as opening menus, navigating back, or retrying failed actions.
-If you encounter ambiguity or an issue, you can involve a human for clarification.
+If you encounter ambiguity or an issue, use old application workflow to understand better. 
 Your Ultimate Goal:
 Execute the requested action with maximum efficiency and accuracy.
 Ensure task completion even if it requires retries, adjustments, or alternative paths.
@@ -337,8 +480,7 @@ Always prioritize efficiency and accuracy in interactions.
 If your action didn't work, retry again differently. 
 During click, always prefer clicking on icons.
 """,
-    name="action_agent",
-    checkpointer=memory
+    name="action_agent"
 )
 
 # Validation Agent: verifies that actions were successful
@@ -359,15 +501,17 @@ Always begin by using get_screen_data to inspect the current state and confirm w
 # Create the Supervisor Workflow
 supervisor_workflow = create_supervisor(
     agents=[action_agent, validation_agent],
+    tools=[ask_human_for_help],
     model=llm,
     prompt=(
         "You are a supervisor managing Android automation tasks. "
         "You have two experts: an action agent that performs UI interactions and a validation agent that confirms the results. "
         "Direct the agents to complete the user's automation request. "
         "Once all steps are verified, respond with FINISH and a summary of the actions taken."
+        "Before executing, analyze the user's automation request and create a structured execution plan. Break down the request into clear, step-by-step instructions, specifying actions and expected validation points."
+        "Ask for human help if something you are stuck at"
     ),
     output_mode="full_history",
-
 )
 
 def log_state(state):
@@ -375,7 +519,7 @@ def log_state(state):
     print("\n=== Current State ===")
     print(json.dumps(state, indent=2, default=lambda o: o.__dict__))  # Pretty-print state
 
-compiled_supervisor = supervisor_workflow.compile(checkpointer=memory)
+compiled_supervisor = supervisor_workflow.compile()
 
 
 # =============================================================================
@@ -399,101 +543,56 @@ def run_supervisor(task_description: str):
         ]
     }
 
-        # Add thread ID to configuration
     config = {
-        "configurable": {
-            "thread_id": "1"  # Or generate a unique ID, e.g., str(uuid4())
-        },
         "recursion_limit": 50
     }
 
     # Invoke the supervisor workflow
     result = compiled_supervisor.invoke(initial_input, config)
-    # Access and print ALL checkpoint data (using .list())
-    print("\n=== All Stored Checkpoints ===")
-    for checkpoint_tuple in memory.list(config): # Correct usage of .list()
-        print(f"Checkpoint")
-        print(checkpoint_tuple)
-        print("-" * 40)
 
     print("\n=== Supervisor Result ===")
     print(json.dumps(result, indent=2, default=lambda o: o.__dict__))
+    
+    # Store the supervisor result in a JSON file
+    results_dir = "results"
+    os.makedirs(results_dir, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    result_file = os.path.join(results_dir, f"supervisor_result_{timestamp}.json")
+    
+    with open(result_file, "w") as f:
+        json.dump(result, f, indent=2, default=lambda o: o.__dict__)
+    
+    print(f"Supervisor result saved to {result_file}")
 
     # Create logs directory if it doesn't exist
     log_dir = "activity_logs"
     os.makedirs(log_dir, exist_ok=True)
     
-    # Create or append to the activity log file
+    # Create or append to the activity log file with simplified output
     log_file = os.path.join(log_dir, "agent_activity_log.jsonl")
     
     with open(log_file, "w") as f:
         f.write(f"AUTOMATION TASK: {task_description}\n")
         f.write(f"COMPLETED AT: {datetime.datetime.now().isoformat()}\n")
-        f.write("="*80 + "\n\n")
-        
-        # Lifecycle markers
-        f.write("=== LIFE BEFORE AUTOMATION ===\n")
-        f.write("Initial state captured in screenshots/actions history\n\n")
-        
-        f.write("=== ACTIVITY TIMELINE ===\n")
-        # Write events here...
-        
-        f.write("\n=== LIFE AFTER AUTOMATION ===\n")
-        f.write("Final state captured in screenshots/actions history\n")
-        f.write("="*80 + "\n")
-        f.write("=== END OF ACTIVITY LOG ===\n")
 
-    # Save combined human-readable log
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    logs_dir = "logs"
-    os.makedirs(logs_dir, exist_ok=True)
-    screen_data_history = []
-    actions_history = []
-    all_events = []
-    for event in result["messages"]:
-        if event["role"] == "agent":
-            if event["content"]["type"] == "function":
-                if event["content"]["name"] == "get_screen_data":
-                    screen_data_history.append({"timestamp": event["timestamp"], "screen_data": event["content"]["output"]})
-                elif event["content"]["name"] == "click_grid" or event["content"]["name"] == "perform_gesture" or event["content"]["name"] == "input_text" or event["content"]["name"] == "press_system_key":
-                    actions_history.append({"timestamp": event["timestamp"], "action": event["content"]["name"], "output": event["content"]["output"]})
-        all_events.append({"timestamp": event["timestamp"], "type": event["role"], "agent": event["agent"], "content": event["content"]})
-    if screen_data_history or actions_history:
-        log_file = os.path.join(logs_dir, f"task_log_{timestamp}.txt")
-        with open(log_file, "w") as f:
-            # Lifecycle Header
-            f.write(f"=== AUTOMATION LIFE CYCLE ===\n")
-            f.write(f"Task: {task_description}\n")
-            f.write(f"Start: {datetime.datetime.now().isoformat()}\n\n")
-
-            # Initial State
-            f.write("=== LIFE BEFORE AUTOMATION ===\n")
-            if screen_data_history:
-                f.write(f"Initial Screen State:\n{screen_data_history[0]['screen_data'][:500]}...\n\n")
-            f.write("No actions performed yet\n\n")
-
-            # Activity Timeline
-            f.write("=== ACTIVITY TIMELINE ===\n")
-            for idx, event in enumerate(all_events, 1):
-                f.write(f"EVENT {idx} - {event['type'].upper()} - {event['timestamp']}\n")
-                f.write(f"Agent: {event['agent']}\n")
-                f.write(f"{event['content']}\n")
-                f.write("-"*50 + "\n\n")
-
-            # Final State
-            f.write("=== LIFE AFTER AUTOMATION ===\n")
-            if screen_data_history:
-                f.write(f"Final Screen State:\n{screen_data_history[-1]['screen_data'][:500]}...\n\n")
-            f.write(f"Total Actions Performed: {len(actions_history)}\n")
-            f.write(f"End: {datetime.datetime.now().isoformat()}\n")
-            f.write("="*80 + "\n")
-            f.write("=== END OF LOG ===\n")
+    print(f"Automation task completed and logged to {log_file}")
+    return result
 
 # =============================================================================
 # MAIN EXECUTION
 # =============================================================================
 
 if __name__ == "__main__":
-    # Example: Automate opening the settings app and validating the settings screen.
-    task = "Open Whatsapp, scroll screen to find lbs park lane group and open the chat messages."
+    # Read task from instruction.txt file
+    try:
+        with open("instruction.txt", "r") as f:
+            task = f.read().strip()
+            if not task:
+                print("Warning: instruction.txt is empty. Using default task.")
+                task = "Open Whatsapp, scroll screen to find lbs park lane group and open the chat messages."
+    except FileNotFoundError:
+        print("Warning: instruction.txt not found. Using default task.")
+        task = "Open Whatsapp, scroll screen to find lbs park lane group and open the chat messages."
+    
+    print(f"Executing task: {task}")
     run_supervisor(task)
