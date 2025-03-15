@@ -398,25 +398,25 @@ def inform_activity(screen_name: str, action_description: str) -> str:
 
 
 @tool
-def application_workflow() -> str:
+def query_application_knowledge(query: str) -> str:
     """
-    Retrieves all recorded activities from the application's activity logs and past human helps. 
-
-    If you have multiways to a task refer workflow to understand better and choose better. 
-    If you not clear with the task given to you, refer workflow to understan better. 
-
-    This tool pulls the complete history of screens visited and actions performed
-    by the agent, providing a full workflow trace of the application's usage.
+    Search through past activity logs to answer questions about the application's behavior and history.
     
+    This tool analyzes past interactions, screens visited, and actions performed by the agent,
+    then uses an LLM to interpret this knowledge and provide a targeted answer to your query.
+    
+    Args:
+        query (str): The specific question about past application behavior or workflow
+        
     Returns:
-        str: JSON string containing all logged activities in chronological order
+        str: A concise, relevant answer based on past application activities
     """
-    
+    print(f"Searching application knowledge for: {query}")
     log_file = os.path.join("activity_logs", "agent_activity_log.jsonl")
     
     # Check if log file exists
     if not os.path.exists(log_file):
-        return "No activity logs found."
+        return "No activity logs found to answer your query."
     
     # Read all logs
     activities = []
@@ -424,27 +424,44 @@ def application_workflow() -> str:
         for line in f:
             if line.strip():  # Skip empty lines
                 try:
+                    # Try to parse as JSON
                     log_entry = json.loads(line)
                     activities.append(log_entry)
                 except json.JSONDecodeError:
-                    continue  # Skip malformed entries
-    
-    # Sort activities by timestamp if needed
-    activities.sort(key=lambda x: x.get("timestamp", ""))
+                    # If not JSON, add as plain text entry
+                    if not line.startswith("====="):  # Skip separator lines
+                        activities.append({"text": line.strip()})
     
     if not activities:
-        return "Activity log exists but contains no entries."
+        return "Activity log exists but contains no entries to analyze for your query."
     
-    # Format the result
-    result = {
-        "total_activities": len(activities),
-        "workflow": activities
-    }
-
-    print("Printing old knowledge")
-
-    return json.dumps(result, indent=2)
-
+    # Format the knowledge context from activities
+    knowledge_context = ""
+    for entry in activities:
+        if isinstance(entry, dict):
+            if "timestamp" in entry and "screen" in entry and "action" in entry:
+                knowledge_context += f"At {entry['timestamp']}, on screen '{entry['screen']}', action: {entry['action']}\n"
+            elif "type" in entry and entry["type"] == "human_interaction":
+                knowledge_context += f"Human interaction - Question: {entry.get('request', 'N/A')}, Response: {entry.get('response', 'N/A')}\n"
+            elif "text" in entry:
+                knowledge_context += f"{entry['text']}\n"
+    
+    # Generate the answer using LLM
+    messages = [
+        {"role": "system", "content": "You are an assistant that analyzes Android automation logs to answer specific questions. Use only the information provided in the logs to answer the question. If the logs don't contain relevant information, say that you cannot find the answer in the available logs."},
+        {"role": "user", "content": f"Based on the following logs of Android app automation activities, please answer this question: {query}\n\nACTIVITY LOGS:\n{knowledge_context}"}
+    ]
+    
+    try:
+        # Use the same LLM that's configured for the main system
+        response = llm.invoke(messages)
+        answer = response.content
+        # print the response from the llm
+        print(f"query_application_knowledge Response: {answer}")
+        return answer
+    except Exception as e:
+        print(f"Error using LLM to analyze knowledge: {str(e)}")
+        return f"Error analyzing application knowledge: {str(e)}"
 
 
 # =============================================================================
@@ -459,7 +476,7 @@ interaction_tools = [
     press_system_key,
     input_text,
     inform_activity,
-    application_workflow
+    query_application_knowledge
 ]
 
 validation_tools = [

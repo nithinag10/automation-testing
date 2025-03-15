@@ -3,7 +3,7 @@
 {"timestamp": "2025-03-15T03:02:29.707672", "screen": "Home Screen", "action": "Identified WhatsApp icon on the home screen to open the app."}
 {"timestamp": "2025-03-15T03:02:49.158880", "screen": "WhatsApp Home Screen", "action": "Identified Nikhil's chat to open."}
 {"timestamp": "2025-03-15T03:03:03.851520", "screen": "Nikhil's Chat Screen", "action": "Preparing to send a 'hello' message."}
-{"timestamp": "2025-03-15T03:05:13.455603", "type": "human_interaction", "request": "The action agent encountered an issue with inputting text in WhatsApp. It seems there might be restrictions or issues with the device's input settings or permissions. Could you please check the device settings or provide guidance on how to resolve this issue?", "response": "yes there is a issue with text inputting"}
+{"timestamp": "2025-03-15T03:05:13.455603", "type": "human_interaction", "request": "The action agent encountered an issue with inputting text in WhatsApp. It seems there might be restrictions or issues with the device's input settings or permissions. Could you please check the device settings or provide guidance on how to resolve this issue?", "response": "yes there is a issue with text inputting, you cannot proceed further"}
 AUTOMATION TASK: 1. Open whatsapp
 2. open nikhil chat
 3. send hello message to him.
@@ -14,9 +14,36 @@ COMPLETED AT: 2025-03-15T03:05:16.577238
 {"timestamp": "2025-03-15T03:07:59.028902", "screen": "PhonePe Gallery Access Screen", "action": "Screen to select photos for QR code upload is displayed."}
 {"timestamp": "2025-03-15T03:08:16.486441", "screen": "PhonePe Gallery Screen", "action": "Gallery is loaded with images. Ready to select the QR code image for upload."}
 {"timestamp": "2025-03-15T03:08:30.369057", "screen": "PhonePe Payment Screen", "action": "QR code uploaded successfully. Ready to enter the payment amount."}
-{"timestamp": "2025-03-15T03:11:19.781029", "type": "human_interaction", "request": "The action agent encountered an issue with inputting text on the device, which might be due to device settings or permissions. Could you please check the device's input settings or permissions to resolve this issue? If you need further assistance, let me know!", "response": "read old application flows"}
+{"timestamp": "2025-03-15T03:11:19.781029", "type": "human_interaction", "request": "The action agent encountered an issue with inputting text on the device, which might be due to device settings or permissions. Could you please check the device's input settings or permissions to resolve this issue? If you need further assistance, let me know!", "response": "there is a problem inputing a text, you cannot proceed further"}
 AUTOMATION TASK: 1. in phonepe 
 2. upload qr code from gallery in phone pe app
 3. pay 100 rupees
 COMPLETED AT: 2025-03-15T03:11:21.979511
+=======================================================
+{"timestamp": "2025-03-15T09:18:18.438518", "screen": "PhonePe Home Screen", "action": "Tapping on the QR Code icon in the bottom navigation bar to upload a QR code from the gallery."}
+{"timestamp": "2025-03-15T09:18:29.826418", "screen": "QR Code Scan Screen", "action": "Tapping on the 'Upload QR' button to select a QR code from the gallery."}
+{"timestamp": "2025-03-15T09:19:08.085332", "screen": "Home Screen", "action": "Reopening the PhonePe app to attempt the QR code upload again."}
+AUTOMATION TASK: 1. in phonepe 
+2. upload qr code from gallery in phone pe app
+3. pay 100 rupees
+COMPLETED AT: 2025-03-15T09:19:48.961079
+=======================================================
+{"timestamp": "2025-03-15T09:21:58.391227", "screen": "PhonePe Home Screen", "action": "Tapping on the QR code icon in the bottom navigation bar to upload a QR code from the gallery."}
+{"timestamp": "2025-03-15T09:22:10.894059", "screen": "QR Code Scanner Screen", "action": "Tapping on the 'Upload QR' button to select a QR code from the gallery."}
+{"timestamp": "2025-03-15T09:22:29.869808", "screen": "Gallery Screen", "action": "Selecting the QR code image with the PhonePe logo to upload."}
+{"timestamp": "2025-03-15T09:22:40.992580", "screen": "Payment Screen", "action": "Entering the amount of 100 rupees."}
+{"timestamp": "2025-03-15T09:23:20.415901", "screen": "Payment Screen", "action": "Scrolling up to ensure the input field is active and visible."}
+{"timestamp": "2025-03-15T09:29:31.264762", "screen": "PhonePe Home Screen", "action": "Navigating to the QR code upload section."}
+{"timestamp": "2025-03-15T09:29:43.180181", "screen": "PhonePe Profile Screen", "action": "Navigating to QR codes & UPI IDs section to upload QR code from gallery."}
+{"timestamp": "2025-03-15T09:29:57.681488", "screen": "PhonePe QR Code Screen", "action": "Attempting to find the option to upload QR code from gallery."}
+{"timestamp": "2025-03-15T09:30:46.972600", "type": "human_interaction", "request": "The action agent encountered an issue where the option to upload a QR code from the gallery in the PhonePe app is not directly visible. Could you provide guidance on how to proceed or if there are any alternative methods to achieve this task?", "response": "go to qr code scan button in the phone pay home"}
+AUTOMATION TASK: 1. in phonepe 
+2. upload qr code from gallery in phone pe app
+3. pay 100 rupees
+COMPLETED AT: 2025-03-15T09:32:06.756585
+=======================================================
+AUTOMATION TASK: 1. in phonepe 
+2. upload qr code from gallery in phone pe app
+3. pay 100 rupees
+COMPLETED AT: 2025-03-15T09:35:39.741199
 =======================================================
