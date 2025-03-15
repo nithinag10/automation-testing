@@ -1,12 +1,35 @@
-# Android ADB REST API
+# Android Automation with Multi-Agent Architecture
 
-A Flask-based REST API that wraps ADB (Android Debug Bridge) commands to interact with Android devices.
+A powerful Android automation framework that uses a three-layer agent architecture powered by LangGraph and LangChain to automate complex tasks on Android devices.
+
+## Project Overview
+
+This project implements an intelligent automation system for Android devices using a sophisticated multi-agent architecture:
+
+1. **Planner Agent** - Reads instructions, breaks them into individual steps, and manages the execution flow
+2. **Supervisor Agent** - Implements a StateGraph workflow to coordinate between action and validation agents
+3. **Execution Agents**:
+   - **Action Agent** - Performs UI interactions on the Android device
+   - **Validation Agent** - Verifies the results of actions
+
+The system handles complex multi-step instructions by parsing them into atomic tasks and executing them sequentially, with progress tracking and error handling capabilities.
+
+## Key Features
+
+- **Natural Language Task Execution**: Execute complex Android tasks described in natural language
+- **Visual Understanding**: Uses Gemini Vision to analyze screenshots and understand UI elements
+- **Grid-Based Interaction**: Applies a numbered grid overlay to screenshots for precise touch interactions
+- **Intelligent Error Recovery**: Automatically detects and attempts to recover from errors during task execution
+- **Activity Logging**: Comprehensive logging of all actions and screens for debugging and analysis
+- **Knowledge Query System**: Query past automation runs to extract insights and solve similar problems
 
 ## Prerequisites
 
-- Python 3.6+
-- ADB installed and available in your PATH
+- Python 3.10+
 - Android device with USB debugging enabled
+- ADB (Android Debug Bridge) installed and configured
+- OpenAI API key for LLM capabilities
+- Google Gemini API key for vision analysis
 
 ## Installation
 
@@ -17,175 +40,120 @@ A Flask-based REST API that wraps ADB (Android Debug Bridge) commands to interac
 pip install -r requirements.txt
 ```
 
+3. Create a `.env` file with the following environment variables:
+
+```
+OPENAI_API_KEY=your_openai_api_key
+GEMINI_API_KEY=your_gemini_api_key
+LANGSMITH_API_KEY=your_langsmith_api_key  # Optional for tracing
+```
+
+## Project Structure
+
+- **run.py** - Main entry point and implementation of the multi-agent architecture
+- **device_actions.py** - Handles direct interactions with the Android device via UIAutomator2
+- **screenshot_analyzer.py** - Captures and analyzes screenshots using Gemini Vision
+- **grid_overlay.py** - Applies a numbered grid to screenshots for precise touch interactions
+- **activity_logs/** - Directory containing logs of all automation activities
+- **results/** - Directory containing the results of supervisor workflows
+
+## Core Components
+
+### Device Actions
+
+The `DeviceActions` class provides methods to interact with Android devices:
+
+- Taking screenshots
+- Clicking at specific coordinates
+- Swiping and scrolling
+- Typing text
+- Pressing system keys
+
+### Screenshot Analyzer
+
+The `ScreenshotAnalyzer` class handles:
+
+- Capturing screenshots from the device
+- Applying grid overlays for touch precision
+- Extracting text and UI elements using Gemini Vision
+
+### Grid Overlay
+
+The `GridOverlay` class:
+
+- Divides the screen into a numbered grid based on finger touch size
+- Provides mapping between grid numbers and screen coordinates
+- Helps agents precisely identify UI elements by grid position
+
+### Multi-Agent System
+
+The system uses a three-layer agent architecture:
+
+1. **Planner Agent**: Breaks down complex tasks into steps
+2. **Supervisor Agent**: Orchestrates the workflow between agents
+3. **Execution Agents**:
+   - **Action Agent**: Performs the actual device interactions
+   - **Validation Agent**: Verifies the results of actions
+
+## Available Tools
+
+The agents have access to the following tools:
+
+- `get_screen_data()` - Captures and analyzes the current screen
+- `click_grid(grid_number)` - Clicks at a specific grid position
+- `perform_gesture(gesture_type)` - Performs swipe gestures
+- `input_text(text)` - Types text on the device
+- `press_system_key(key_name)` - Presses system keys like home, back, etc.
+- `match_screen_with_description(expected_screen_description)` - Validates the current screen
+- `ask_human_for_help(query)` - Requests human assistance when stuck
+- `inform_activity(screen_name, action_description)` - Logs the current activity
+- `query_application_knowledge(query)` - Searches past activities to answer questions
+
 ## Usage
 
-Start the server:
+1. Create an instruction file (`instruction.txt`) with the tasks you want to automate:
+
+```
+1. open whatsapp
+2. open nikhil chat
+3. send hello message to him
+```
+
+2. Run the automation:
 
 ```bash
-python app.py
+python run.py
 ```
 
-The API will be available at `http://localhost:5000`
+3. The system will:
+   - Parse the instructions
+   - Break them down into steps
+   - Execute each step using the appropriate agents
+   - Log all activities for future reference
 
-## API Endpoints
+## Logging and Debugging
 
-### Get Connected Devices
+All automation activities are logged in the `activity_logs/agent_activity_log.jsonl` file. Each log entry contains:
 
-```
-GET /api/devices
-```
+- Timestamp
+- Current screen
+- Action performed
+- Human interactions (if any)
 
-Returns a list of connected Android devices.
+You can query past automation runs using the `query_application_knowledge` tool to extract insights and solve similar problems.
 
-### Take Screenshot
+## Example Queries
 
-```
-GET /api/screenshot?device_id=DEVICE_ID
-```
+You can use the `query_application_knowledge` tool to ask questions about past automation runs:
 
-Takes a screenshot of the device and returns it as a PNG image.
+- "What issues occurred during the WhatsApp automation?"
+- "How did the agent handle the payment flow in PhonePe?"
+- "What screens were visited during the last task?"
 
-Parameters:
-- `device_id` (optional): Specific device ID if multiple devices are connected
+## Contributing
 
-### Tap Screen
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-```
-POST /api/tap
-```
+## License
 
-Simulates a tap on the screen at specified coordinates.
-
-Request body:
-```json
-{
-    "x": 500,
-    "y": 500,
-    "device_id": "DEVICE_ID" (optional)
-}
-```
-
-### Swipe Screen
-
-```
-POST /api/swipe
-```
-
-Simulates a swipe on the screen between specified coordinates.
-
-Request body:
-```json
-{
-    "x1": 100,
-    "y1": 500,
-    "x2": 600,
-    "y2": 500,
-    "duration": 300,
-    "device_id": "DEVICE_ID" (optional)
-}
-```
-
-### Press Key
-
-```
-POST /api/key
-```
-
-Simulates a key press on the device.
-
-Request body:
-```json
-{
-    "keycode": 4,
-    "device_id": "DEVICE_ID" (optional)
-}
-```
-
-Common keycodes:
-- 3: HOME
-- 4: BACK
-- 26: POWER
-- 24: VOLUME_UP
-- 25: VOLUME_DOWN
-
-### Input Text
-
-```
-POST /api/text
-```
-
-Inputs text on the device.
-
-Request body:
-```json
-{
-    "text": "Hello World",
-    "device_id": "DEVICE_ID" (optional)
-}
-```
-
-### Execute Shell Command
-
-```
-POST /api/shell
-```
-
-Executes a custom ADB shell command.
-
-Request body:
-```json
-{
-    "command": "ls -la",
-    "device_id": "DEVICE_ID" (optional)
-}
-```
-
-### Install APK
-
-```
-POST /api/install
-```
-
-Installs an APK on the device.
-
-Form data:
-- `apk`: APK file
-- `device_id` (optional): Specific device ID if multiple devices are connected
-
-## Health Check
-
-```
-GET /health
-```
-
-Returns a simple health check response.
-
-## Example Usage (with curl)
-
-### Get devices
-
-```bash
-curl http://localhost:5000/api/devices
-```
-
-### Take a screenshot
-
-```bash
-curl -o screenshot.png http://localhost:5000/api/screenshot
-```
-
-### Tap the screen
-
-```bash
-curl -X POST http://localhost:5000/api/tap \
-  -H "Content-Type: application/json" \
-  -d '{"x": 500, "y": 500}'
-```
-
-### Input text
-
-```bash
-curl -X POST http://localhost:5000/api/text \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello World"}'
-```
+This project is licensed under the MIT License - see the LICENSE file for details.
