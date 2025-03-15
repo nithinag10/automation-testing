@@ -18,8 +18,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from device_actions import DeviceActions
-from grid_overlay import GridOverlay
+from core.device_actions import DeviceActions
+from core.grid_overlay import GridOverlay
 
 # Load environment variables from .env file
 try:

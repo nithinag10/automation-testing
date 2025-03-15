@@ -20,10 +20,11 @@ from langchain_core.tools import tool, Tool
 from langgraph.prebuilt import create_react_agent
 from langgraph_supervisor import create_supervisor
 
-# Local modules
-from device_actions import DeviceActions
-from screenshot_analyzer import ScreenshotAnalyzer
-from grid_overlay import GridOverlay
+# Import core modules
+from core.device_actions import DeviceActions
+from core.screenshot_analyzer import ScreenshotAnalyzer
+from core.grid_overlay import GridOverlay
+from core.logger import log_activity, log_human_interaction, log_task_completion
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -99,14 +100,14 @@ def get_screen_data() -> str:
         return extracted_text
         
     except Exception as e:
-        error_msg = f"Error in screen data capture and analysis: {str(e)}"
-        print(f"Exception: {error_msg}")
+        error_msg = f"Error in get_screen_data: {str(e)}"
+        print(f"Error: {error_msg}")
         return error_msg
-
 
 @tool
 def click_grid(grid_number: int) -> str:
-    """Perform a click action at the center of the specified grid cell.
+    """
+    Perform a click action at the center of the specified grid cell.
     
     Args:
         grid_number (int): The grid cell number (starting from 1) where the click should occur.
@@ -118,7 +119,7 @@ def click_grid(grid_number: int) -> str:
     print(f"\n=== Clicking at grid {grid_number} ===")
     print(f"Screen bounds: 1080x2400")  # Known device resolution
     
-    # Initialize GridOverlay with the device's specifications
+    # Get grid overlay instance to map grid numbers to coordinates
     grid_overlay = GridOverlay()
     
     # Convert grid number to screen coordinates
@@ -141,7 +142,6 @@ def click_grid(grid_number: int) -> str:
         error_msg = f"Failed to click at grid {grid_number}."
         print(f"Error: {error_msg}")
         return error_msg
-
 
 @tool
 def perform_gesture(gesture_type: str) -> str:
@@ -183,29 +183,25 @@ def perform_gesture(gesture_type: str) -> str:
         print(f"Exception: {error_msg}")
         return error_msg
 
-
 @tool
 def input_text(text: str) -> str:
-    """Input text on the device."""
-    print(f"\n=== Inputting Text ===")
-    print(f"Text to input: {text}")
+    """
+    Input text on the device.
+    """
+    print(f"\n=== Inputting Text: {text} ===")
     
-    if not text:
-        error_msg = "Empty text provided"
-        print(f"Error: {error_msg}")
-        return error_msg
+    try:
+        success = device.input_text(text)
         
-    print("Executing input command...")
-    success = device.input_text(text)
-    
-    if success:
-        print("Text input successful")
-        return f"Successfully input text: '{text}'"
-    else:
-        error_msg = f"Failed to input text: '{text}'"
-        print(f"Error: {error_msg}")
+        if success:
+            return f"Successfully input text: '{text}'"
+        else:
+            return "Failed to input text"
+            
+    except Exception as e:
+        error_msg = f"Error inputting text: {str(e)}"
+        print(f"Exception: {error_msg}")
         return error_msg
-
 
 @tool
 def match_screen_with_description(expected_screen_description: str) -> str:
@@ -223,110 +219,103 @@ def match_screen_with_description(expected_screen_description: str) -> str:
     Returns:
         str: Analysis report detailing whether the screen matches the expected description
     """
-    print(f"\n=== Matching Screen Against Description ===")
-    print(f"Expected screen: {expected_screen_description}")
+    print(f"\n=== Matching Screen with Description ===")
+    print(f"Expected screen description: {expected_screen_description}")
     
-    if not expected_screen_description:
-        error_msg = "No screen description provided"
-        print(f"Error: {error_msg}")
-        return error_msg
+    # Take a screenshot first
+    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    screenshot_path = f"validation_screenshot_{timestamp_str}.png"
     
     try:
-        # Take a new screenshot
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"screenshot_{timestamp}.png"
-        success = device.take_screenshot(output_path)
+        # Capture screenshot
+        print(f"Taking screenshot for validation: {screenshot_path}")
+        success = device.take_screenshot(screenshot_path)
         
-        if not success:
-            error_msg = "Failed to take screenshot for verification"
+        if not success or not os.path.exists(screenshot_path):
+            error_msg = "Failed to take screenshot for validation"
             print(f"Error: {error_msg}")
-            return error_msg
+            return json.dumps({"matches": False, "error": error_msg})
+            
+        # Extract text from screenshot
+        print("Extracting text from screenshot...")
+        extracted_text = screenshot_analyzer.extract_text_with_gemini(screenshot_path)
         
-    
-        # Verify the screen matches the description
-        verification_results = screenshot_analyzer.verify_screen_content(output_path, [expected_screen_description])
+        if not extracted_text:
+            error_msg = "Failed to extract text from validation screenshot"
+            print(f"Error: {error_msg}")
+            return json.dumps({"matches": False, "error": error_msg})
+            
+        print(f"Successfully extracted text, length: {len(extracted_text)} characters")
         
-        # Get the analysis text
-        analysis_text = verification_results.get("screenshot_analysis", "No analysis available")
+        # Use Gemini to compare the extracted text with the expected description
+        print("Comparing screen content with expected description...")
+        comparison_result = screenshot_analyzer.compare_screen_with_description(
+            screenshot_path,
+            expected_screen_description,
+            extracted_text
+        )
         
-        # Format the results as a readable report
-        report = ["=== Screen Match Analysis Report ==="]
-        report.append(f"Screen captured at: {timestamp}")
+        # Format the result
+        result = {
+            "matches": comparison_result.get("matches", False),
+            "confidence": comparison_result.get("confidence", 0.0),
+            "explanation": comparison_result.get("explanation", "No explanation provided"),
+            "screenshot_path": screenshot_path,
+            "current_screen_text": extracted_text[:300] + "..." if len(extracted_text) > 300 else extracted_text
+        }
         
-        # Determine if the screen matches the description
-        if "not match" in analysis_text.lower() or "doesn't match" in analysis_text.lower() or "does not match" in analysis_text.lower():
-            report.append("❌ RESULT: Screen does not match the expected description")
-            match_status = False
-        else:
-            report.append("✅ RESULT: Screen appears to match the expected description")
-            match_status = True
-        
-        # Add the detailed analysis
-        report.append("\n=== Expected Screen Description ===")
-        report.append(expected_screen_description)
-        
-        report.append("\n=== Actual Screen Analysis ===")
-        report.append(analysis_text)
-
-        # print the report
-        print("\n".join(report))
-        
-        # Add a conclusion
-        report.append("\n=== Conclusion ===")
-        if match_status:
-            report.append("The screen appears to match the expected description.")
-        else:
-            report.append("The screen does not match the expected description.")
-            report.append("Key differences may include missing elements or different layout.")
-        
-        # Return the formatted report
-        formatted_report = "\n".join(report)
-        print("Screen matching completed")
-        return formatted_report
+        print(f"Match result: {result['matches']} (Confidence: {result['confidence']})")
+        return json.dumps(result, indent=2)
         
     except Exception as e:
-        error_msg = f"Error during screen matching: {str(e)}"
+        error_msg = f"Error in match_screen_with_description: {str(e)}"
         print(f"Exception: {error_msg}")
-        return error_msg
-
+        return json.dumps({"matches": False, "error": error_msg})
 
 @tool
 def press_system_key(key_name: str) -> str:
-    """Press a system key on the device.
-
+    """
+    Press a system key on the device.
+    
     Available keys: home, back, enter, volume_up, volume_down, power
     """
     print(f"\n=== Pressing System Key: {key_name} ===")
     
+    # Map key names to key codes
     key_map = {
         "home": 3,
         "back": 4,
+        "enter": 66,
         "volume_up": 24,
         "volume_down": 25,
-        "enter": 66,
+        "power": 26
     }
-
-    key_code = key_map.get(key_name.lower())
-    if not key_code:
-        error_msg = f"Unknown key: {key_name}. Available keys: {list(key_map.keys())}"
-        print(f"Error: {error_msg}")
-        return error_msg
-
-    print(f"Executing key press command (keycode: {key_code})...")
-    success = device.press_key(key_code)
     
-    if success:
-        print("Key press successful")
-        return f"Pressed system key: {key_name}"
-    else:
-        error_msg = f"Failed to press system key: {key_name}"
+    if key_name not in key_map:
+        valid_keys = ", ".join(key_map.keys())
+        error_msg = f"Invalid key name: {key_name}. Valid options: {valid_keys}"
         print(f"Error: {error_msg}")
         return error_msg
-
+    
+    key_code = key_map[key_name]
+    
+    try:
+        success = device.press_key(key_code)
+        
+        if success:
+            return f"Successfully pressed the {key_name} key"
+        else:
+            return f"Failed to press the {key_name} key"
+            
+    except Exception as e:
+        error_msg = f"Error pressing key {key_name}: {str(e)}"
+        print(f"Exception: {error_msg}")
+        return error_msg
 
 @tool
 def ask_human_for_help(query: str) -> str:
-    """Request human assistance and log the conversation. Use this when stuck or need clarification.
+    """
+    Request human assistance and log the conversation. Use this when stuck or need clarification.
     
     Args:
         query: The specific question/request for the human
@@ -334,27 +323,28 @@ def ask_human_for_help(query: str) -> str:
     Returns:
         str: Human's response
     """
-    # Get human input
-    response = input(f"AGENT REQUEST: {query}\nYour response: ")
+    print(f"\n=== HUMAN ASSISTANCE NEEDED ===")
+    print(f"Question: {query}")
     
-    # Log to activity log
-    log_entry = {
-        "timestamp": datetime.datetime.now().isoformat(),
-        "type": "human_interaction",
-        "request": query,
-        "response": response
-    }
+    # Print a visible separator to make the question stand out
+    print("\n" + "=" * 60)
+    print("🔴 HUMAN ASSISTANCE NEEDED 🔴")
+    print(f"Question: {query}")
+    print("=" * 60 + "\n")
     
-    try:
-        log_dir = "activity_logs"
-        os.makedirs(log_dir, exist_ok=True)
-        with open(os.path.join(log_dir, "agent_activity_log.jsonl"), "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-    except Exception as e:
-        print(f"Error logging human interaction: {e}")
-
+    # Get the human's response
+    response = input("Your response: ")
+    
+    # Print another separator to indicate the end of the human interaction
+    print("\n" + "=" * 60)
+    print("🟢 HUMAN RESPONSE RECEIVED 🟢")
+    print(f"Response: {response}")
+    print("=" * 60 + "\n")
+    
+    # Log the interaction using the new core logger
+    log_human_interaction(query, response)
+    
     return response
-
 
 @tool
 def inform_activity(screen_name: str, action_description: str) -> str:
@@ -371,31 +361,8 @@ def inform_activity(screen_name: str, action_description: str) -> str:
     Returns:
         str: Confirmation message that the activity was logged
     """
-    # Create logs directory if it doesn't exist
-    log_dir = "activity_logs"
-    os.makedirs(log_dir, exist_ok=True)
-    
-    # Create or append to the activity log file
-    log_file = os.path.join(log_dir, "agent_activity_log.jsonl")
-    
-    # Prepare log entry
-    timestamp = datetime.datetime.now().isoformat()
-    log_entry = {
-        "timestamp": timestamp,
-        "screen": screen_name,
-        "action": action_description
-    }
-
-    # Append to log file
-    with open(log_file, "a") as f:
-        f.write(json.dumps(log_entry) + "\n")
-    
-    # Format message for user feedback (especially for accessibility)
-    accessibility_message = f"Screen: {screen_name} | Action: {action_description}"
-    
-    print(f"\n[ACTIVITY TRACKER] {accessibility_message}\n")
-    return accessibility_message
-
+    # Use the new centralized logging function that always appends
+    return log_activity(screen_name, action_description)
 
 @tool
 def query_application_knowledge(query: str) -> str:
@@ -604,37 +571,40 @@ def run_supervisor(task_description: str):
         json.dump(result, f, indent=2, default=lambda o: o.__dict__)
     
     print(f"Supervisor result saved to {result_file}")
-
-    # Create logs directory if it doesn't exist
-    log_dir = "activity_logs"
-    os.makedirs(log_dir, exist_ok=True)
     
-    # Create or append to the activity log file with simplified output
-    log_file = os.path.join(log_dir, "agent_activity_log.jsonl")
+    # Log task completion using the core logger module instead of direct file operations
+    # THIS FIXES THE LOGGING ISSUE
+    log_task_completion(task_description, result)
     
-    with open(log_file, "a") as f:
-        f.write(f"AUTOMATION TASK: {task_description}\n")
-        f.write(f"COMPLETED AT: {datetime.datetime.now().isoformat()}\n")
-        f.write("=======================================================\n")
-
-    print(f"Automation task completed and logged to {log_file}")
     return result
+
 
 # =============================================================================
 # MAIN EXECUTION
 # =============================================================================
 
-if __name__ == "__main__":
-    # Read task from instruction.txt file
-    try:
-        with open("instruction.txt", "r") as f:
-            task = f.read().strip()
-            if not task:
-                print("Warning: instruction.txt is empty. Using default task.")
-                task = "Open Whatsapp, scroll screen to find lbs park lane group and open the chat messages."
-    except FileNotFoundError:
-        print("Warning: instruction.txt not found. Using default task.")
-        task = "Open Whatsapp, scroll screen to find lbs park lane group and open the chat messages."
+def main():
+    """Main entry point for the Android automation system."""
+    # Check for instruction file
+    instruction_file = "instruction.txt"
+    if not os.path.exists(instruction_file):
+        print(f"Instruction file '{instruction_file}' not found!")
+        return 1
     
-    print(f"Executing task: {task}")
-    run_supervisor(task)
+    # Read instructions
+    with open(instruction_file, "r") as f:
+        instructions = f.read().strip()
+    
+    if not instructions:
+        print("Instruction file is empty!")
+        return 1
+    
+    print(f"Instructions: {instructions}")
+    
+    # Run the supervisor
+    run_supervisor(instructions)
+    
+    return 0
+
+if __name__ == "__main__":
+    main()
