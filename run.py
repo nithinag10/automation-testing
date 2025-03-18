@@ -138,6 +138,11 @@ def click_grid(grid_number: int) -> str:
     
     if success:
         print("Click action successful")
+        # Add a 3-second wait after clicking to allow the screen to load
+        import time
+        print("Waiting for 3 seconds to allow screen to load...")
+        time.sleep(3)
+        print("Wait completed")
         return f"Clicked at grid {grid_number} which corresponds to screen coordinates ({x}, {y})."
     else:
         error_msg = f"Failed to click at grid {grid_number}."
