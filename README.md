@@ -8,13 +8,29 @@ This framework provides a robust system for automating interactions with Android
 
 ## Architecture
 
-The framework uses a three-layer agent architecture:
+This project implements a three-layer agent architecture:
 
-1. **Supervisor Agent** - Implements a StateGraph workflow to coordinate between action and validation agents
-2. **Action Agent** - Performs UI interactions on the Android device
-3. **Validation Agent** - Verifies the results of actions
+1. **Planner Agent** - Reads instructions, breaks them into individual steps, and manages the execution flow
+2. **Supervisor Agent** - Implements a StateGraph workflow to coordinate between action and validation agents
+3. **Execution Agents**:
+   - **Action Agent** - Performs UI interactions on the Android device
+   - **Validation Agent** - Verifies the results of actions
 
 The system handles complex multi-step instructions by parsing them into atomic tasks and executing them sequentially, with progress tracking and error handling capabilities.
+
+## Memory System
+
+The project includes a robust memory system that enables agents to:
+
+1. **Store and Parse Instructions** - Break down complex instructions into manageable steps
+2. **Track Progress** - Monitor the execution of multi-step tasks
+3. **Store Procedural Knowledge** - Remember how to perform specific tasks for future reference
+4. **Recall Relevant Information** - Search and retrieve stored knowledge when needed
+
+### Memory Types
+
+- **Instruction Memory**: Stores complex instructions and tracks progress through individual steps
+- **Procedural Memory**: Stores knowledge about how to perform specific tasks (e.g., how to log in to an app)
 
 ## Project Structure
 
@@ -24,7 +40,8 @@ android-adb-api/
 │   ├── device_actions.py  # Device interaction methods
 │   ├── screenshot_analyzer.py # Screen capture and analysis
 │   ├── grid_overlay.py    # Grid overlay for touch coordinates
-│   └── logger.py          # Centralized logging system
+│   ├── logger.py          # Centralized logging system
+│   └── memory_store.py    # Memory management system
 ├── tools/                 # Tool modules for specific functions
 │   ├── device_tools.py    # Device interaction tools
 │   ├── screen_tools.py    # Screen capture and analysis tools
@@ -34,6 +51,9 @@ android-adb-api/
 ├── utils/                 # Utility modules
 │   ├── config.py          # Configuration management
 │   └── helpers.py         # Helper functions
+├── activity_logs/         # Agent activity logs
+├── memory_store/          # Stored memories and instructions
+├── results/               # Execution results
 ├── run.py                 # Main entry point with agent definitions
 ├── instruction.txt        # Instructions for automation
 ├── requirements.txt       # Project dependencies

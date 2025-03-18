@@ -95,17 +95,17 @@ class Logger:
         """
         timestamp = datetime.datetime.now().isoformat()
         
+        # Create a structured log entry in the same format as other logs
+        log_entry = {
+            "timestamp": timestamp,
+            "type": "task_completion",
+            "task_description": task_description,
+            "result": result
+        }
+        
         # Always use append mode to preserve existing logs
         with open(self.log_file, "a") as f:
-            f.write(f"AUTOMATION TASK: {task_description}\n")
-            f.write(f"COMPLETED AT: {timestamp}\n")
-            f.write("=======================================================\n")
-            
-            # Log the result if provided
-            if result:
-                f.write("SUPERVISOR RESULT:\n")
-                f.write(json.dumps(result, indent=2, default=lambda o: o.__dict__) + "\n")
-                f.write("=======================================================\n\n")
+            f.write(json.dumps(log_entry, default=lambda o: o.__dict__) + "\n")
         
         print(f"Automation task completed and logged to {self.log_file}")
         

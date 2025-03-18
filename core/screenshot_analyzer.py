@@ -116,22 +116,22 @@ class ScreenshotAnalyzer:
         Returns:
             str: Path to the saved screenshot, or None if failed.
         """
-        if not UI_AUTOMATOR_AVAILABLE or not self.device:
-            print("UI Automator not available. Cannot take screenshot.")
-            return None
-            
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = f"screenshot_{timestamp}.png"
-            
         try:
-            # Take screenshot using UIAutomator2
-            self.device_actions.take_screenshot(output_path)
+            # Generate timestamp-based filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = f"screenshot_{timestamp}.png"
             
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                print(f"Screenshot saved to {output_path}")
+            print(f"Screenshot output path: {output_path}")
+            
+            # Use device_actions to take screenshot instead of direct UIAutomator2
+            print("Using device_actions.take_screenshot() method for screenshot capture")
+            result = self.device_actions.take_screenshot(output_path)
+            
+            if result and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                print(f"Screenshot saved to: {output_path}")
                 return output_path
             else:
-                print("Screenshot file is empty or not created")
+                print("Error: Screenshot failed or file is empty")
                 return None
                 
         except Exception as e:

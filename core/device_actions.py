@@ -5,6 +5,7 @@ Device Actions Module
 This module provides functionality to perform actions on Android devices
 using the UIAutomator2 library. It supports actions like clicking on
 specific coordinates, swiping, typing text, and more.
+
 """
 
 import os
@@ -48,22 +49,33 @@ class DeviceActions:
         Otherwise, connects to the first available device.
         """
         if not UI_AUTOMATOR_AVAILABLE:
-            print("UIAutomator2 is not available. Cannot connect to device.")
+            print("UIAutomator2 not available. Device interactions will be disabled.")
             return
             
         try:
             if self.device_serial:
+                # Connect to specific device
                 self.device = u2.connect(self.device_serial)
                 print(f"Connected to device: {self.device_serial}")
             else:
-                self.device = u2.connect()
-                print("Connected to the first available device")
+                # Connect to first available device
+                import subprocess
+                # Get list of connected devices
+                result = subprocess.run(['adb', 'devices'], capture_output=True, text=True)
+                lines = result.stdout.strip().split('\n')[1:]  # Skip the first line (header)
                 
-            # Get device info
-            device_info = self.device.info
-            print(f"Device model: {device_info.get('model', 'Unknown')}")
-            print(f"Screen resolution: {device_info.get('displayWidth', 0)}x{device_info.get('displayHeight', 0)}")
+                # Find first connected device
+                for line in lines:
+                    if line.strip():
+                        device_serial = line.split()[0]
+                        self.device_serial = device_serial
+                        self.device = u2.connect(device_serial)
+                        print(f"Connected to first available device: {device_serial}")
+                        break
                 
+                if not self.device:
+                    print("No devices found. Please connect a device.")
+                    
         except Exception as e:
             print(f"Error connecting to device: {str(e)}")
             self.device = None
@@ -189,6 +201,23 @@ class DeviceActions:
         Returns:
             bool: True if screenshot was successful, False otherwise
         """
+        if not UI_AUTOMATOR_AVAILABLE or not self.device:
+            print("UIAutomator2 not available or no device connected.")
+            # Fallback: Create a dummy screenshot for testing
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+                # Create a blank image with text indicating no device
+                img = Image.new('RGB', (1080, 2400), color=(50, 50, 50))
+                draw = ImageDraw.Draw(img)
+                draw.text((540, 1200), "No Device Connected", fill=(255, 255, 255), anchor="mm")
+                draw.text((540, 1300), "Mock Screenshot", fill=(255, 255, 255), anchor="mm")
+                img.save(output_path)
+                print(f"Created mock screenshot at {output_path}")
+                return os.path.exists(output_path)
+            except Exception as e:
+                print(f"Error creating mock screenshot: {str(e)}")
+                return False
+        
         try:
             # Use uiautomator2's screenshot method
             self.device.screenshot(output_path)
@@ -224,6 +253,7 @@ class DeviceActions:
     def scroll_up(self):
         """
         Scroll up on the device screen using ADB shell swipe command.
+        This performs a gentle scroll that only moves enough to reveal new content.
         
         Returns:
             bool: True if scroll was successful, False otherwise
@@ -233,12 +263,36 @@ class DeviceActions:
             return False
             
         try:
-            # Scroll up from bottom to top
-            self.device.shell('input swipe 540 2000 540 500 200')
-            print("Scrolled up")
+            # Perform a gentler scroll up (from bottom to middle-top)
+            # Use a shorter distance to avoid scrolling too far
+            # Original was: self.device.shell('input swipe 540 2000 540 500 200')
+            self.device.shell('input swipe 540 1500 540 1000 200')
+            print("Scrolled up gently")
             return True
         except Exception as e:
             print(f"Error scrolling up: {str(e)}")
+            return False
+
+    def scroll_down(self):
+        """
+        Scroll down on the device screen using ADB shell swipe command.
+        This performs a gentle scroll that only moves enough to reveal new content.
+        
+        Returns:
+            bool: True if scroll was successful, False otherwise
+        """
+        if self.device is None:
+            print("No device connected")
+            return False
+            
+        try:
+            # Perform a gentle scroll down (from middle-top to middle-bottom)
+            # Use a shorter distance to avoid scrolling too far
+            self.device.shell('input swipe 540 1000 540 1500 200')
+            print("Scrolled down gently")
+            return True
+        except Exception as e:
+            print(f"Error scrolling down: {str(e)}")
             return False
 
     def swipe_left(self):

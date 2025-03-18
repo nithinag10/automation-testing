@@ -23,6 +23,6 @@ Thumbs.db
 .env
 
 
-results/*
-
-activity_logs/*
+results/
+activity_logs/
+logs/
