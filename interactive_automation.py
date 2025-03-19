@@ -57,6 +57,14 @@ def click_grid(grid_number: str) -> str:
         return "Error: Automation system not initialized"
     return _automation_instance._click_grid_impl(grid_number)
 
+@tool
+def get_human_clarification(query: str) -> str:
+    """If any doubts in the instruction, use this tool to get clarification from human"""
+    global _automation_instance
+    if not _automation_instance:
+        return "Error: Automation system not initialized"
+    return _automation_instance._get_human_clarification_impl(query)
+
 class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     """Custom HTTP request handler to handle form submissions and display screenshots"""
     
@@ -175,6 +183,65 @@ class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 error_response = {'success': False, 'message': 'Invalid request format'}
                 self.wfile.write(json.dumps(error_response).encode('utf-8'))
+            
+            # Process clarification response endpoint
+            elif self.path == "/respond_clarification":
+                # Get content length
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                
+                # Parse form data if content type is form data
+                if self.headers.get('Content-Type') == 'application/x-www-form-urlencoded':
+                    form_data = urllib.parse.parse_qs(post_data.decode('utf-8'))
+                    
+                    # Check if this is a clarification response
+                    if 'clarification_response' in form_data:
+                        response = form_data['clarification_response'][0]
+                        print(f"Received clarification response: {response}")
+                        
+                        # Store the response in the automation instance
+                        if self.automation_instance and self.automation_instance.waiting_for_clarification:
+                            self.automation_instance.clarification_response = response
+                            self.automation_instance.waiting_for_clarification = False
+                            
+                            # Send JSON response
+                            self.send_response(200)
+                            self.send_header('Content-type', 'application/json')
+                            self.send_header('Access-Control-Allow-Origin', '*')
+                            self.end_headers()
+                            success_response = {'success': True, 'message': 'Clarification response received'}
+                            self.wfile.write(json.dumps(success_response).encode('utf-8'))
+                            return
+                
+                # For JSON requests (e.g., fetch API)
+                elif self.headers.get('Content-Type') == 'application/json':
+                    data = json.loads(post_data.decode('utf-8'))
+                    
+                    if 'clarification_response' in data:
+                        response = data['clarification_response']
+                        print(f"Received clarification response (JSON): {response}")
+                        
+                        # Store the response in the automation instance
+                        if self.automation_instance and self.automation_instance.waiting_for_clarification:
+                            self.automation_instance.clarification_response = response
+                            self.automation_instance.waiting_for_clarification = False
+                            
+                            # Send JSON response
+                            self.send_response(200)
+                            self.send_header('Content-type', 'application/json')
+                            self.send_header('Access-Control-Allow-Origin', '*')
+                            self.end_headers()
+                            success_response = {'success': True, 'message': 'Clarification response received'}
+                            self.wfile.write(json.dumps(success_response).encode('utf-8'))
+                            return
+                
+                # If we get here, something went wrong
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                error_response = {'success': False, 'message': 'Invalid clarification response format'}
+                self.wfile.write(json.dumps(error_response).encode('utf-8'))
             else:
                 # Handle other POST requests
                 self.send_response(404)
@@ -237,6 +304,11 @@ class InteractiveAutomation:
         self.extracted_text = ""
         self.latest_action = ""
         self.instruction_log = []
+        
+        # Clarification state variables
+        self.current_clarification_query = None
+        self.clarification_response = None
+        self.waiting_for_clarification = False
 
         # Register this instance for the global tools
         global _automation_instance
@@ -279,20 +351,26 @@ class InteractiveAutomation:
         try:
             self.react_agent = create_react_agent(
                 model = self.llm,
-                tools=[analyze_screen, click_grid],
+                tools=[analyze_screen, click_grid, get_human_clarification],
                 prompt="""
                 You are an Action Agent specialized in executing tasks on Android devices using a **ReAct (Reasoning + Acting)** approach. 
                 Your primary objective is to analyze the situation, reason about the best course of action, and then execute the necessary steps efficiently.
                 
-                You have two primary tools at your disposal:
+                You have three primary tools at your disposal:
                 1. analyze_screen: Captures a screenshot and extracts all text information from it with grid numbers
                 2. click_grid: Clicks on a specific grid location by its grid number (extract from analyze screen)
+                3. get_human_clarification: If you receive ambiguous instructions or need help deciding what to do, use this to ask the human for clarification
                 
                 When given an instruction:
                 1. First, analyze the current screen to understand what's visible and where elements are located
                 2. Identify which grid number corresponds to the element you need to interact with
                 3. Click on the appropriate grid number
                 4. After each action, analyze the screen again to see the updated state
+                
+                When you are unsure about what to do:
+                1. If the instruction is ambiguous, unclear, or you have multiple options to choose from
+                2. Use the get_human_clarification tool to ask a specific question about what you should do
+                3. Wait for the human's response before proceeding
                 
                 Remember:
                 - Always follow natural Android UI patterns (scrolling if needed, navigating back, etc.)
@@ -356,6 +434,113 @@ class InteractiveAutomation:
         except Exception as e:
             return f"Error clicking grid {grid_number}: {str(e)}"
     
+    def _get_human_clarification_impl(self, query: str) -> str:
+        """Implementation of the get_human_clarification tool"""
+        print(f"\n=== Requesting Human Clarification ===\nQuery: {query}")
+        
+        try:
+            # Store the query for display in the web interface
+            self.current_clarification_query = query
+            self.clarification_response = None
+            self.waiting_for_clarification = True
+            
+            # Take a screenshot to show the current state
+            if not self.current_screenshot:
+                self._take_screenshot()
+                
+            # Update the HTML viewer with the clarification request
+            self._create_viewer_html(self.current_screenshot)
+            
+            # Log the clarification request
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(self.instruction_log_file, "a") as f:
+                f.write(f"[{timestamp}] CLARIFICATION REQUEST: {query}\n")
+            
+            # Display URLs for manual access (for web interface)
+            session_url = f"http://localhost:{self.server_port}/session_{self.session_id}/viewer/index.html"
+            root_url = f"http://localhost:{self.server_port}/"
+            print(f"\n*** Web interface available at: ***")
+            print(f"1. {session_url}")
+            print(f"2. {root_url} (alternative)")
+
+            # Terminal-based input for clarification (direct method)
+            print("\n--- TERMINAL-BASED CLARIFICATION ---")
+            print(f"Question from Agent: {query}")
+            
+            # Create a flag for the input thread to know when to stop
+            input_received = False
+            terminal_response = None
+            
+            # Define a function to get input with a timeout
+            def get_terminal_input():
+                nonlocal input_received, terminal_response
+                print("\nProvide your clarification here (type your response and press Enter):")
+                try:
+                    response = input("> ")
+                    terminal_response = response
+                    input_received = True
+                    print(f"Thank you for your response: '{response}'")
+                except Exception as e:
+                    print(f"Error getting input: {str(e)}")
+            
+            # Start a thread to get the input
+            input_thread = threading.Thread(target=get_terminal_input)
+            input_thread.daemon = True
+            input_thread.start()
+                
+            # Wait for the response (either from web interface or terminal)
+            max_wait_time = 300  # Maximum wait time in seconds (5 minutes)
+            wait_interval = 1    # Check interval in seconds
+            total_waited = 0
+            
+            print("Waiting for human clarification response...")
+            while (self.waiting_for_clarification and not input_received) and total_waited < max_wait_time:
+                time.sleep(wait_interval)
+                total_waited += wait_interval
+                if total_waited % 10 == 0:  # Print status every 10 seconds
+                    print(f"Still waiting for clarification... ({total_waited}s)")
+                    # Remind user every 30 seconds
+                    if total_waited % 30 == 0:
+                        print("Please provide your response either in the terminal or web interface")
+            
+            # Check which response we got (terminal or web)
+            if input_received and terminal_response:
+                response = terminal_response
+                print(f"Received terminal clarification: {response}")
+            elif self.clarification_response:
+                response = self.clarification_response
+                print(f"Received web clarification: {response}")
+            else:
+                timeout_msg = "No response received within the timeout period."
+                print(timeout_msg)
+                
+                # Log the timeout
+                with open(self.instruction_log_file, "a") as f:
+                    f.write(f"[{timestamp}] CLARIFICATION TIMEOUT\n")
+                    f.write("-" * 80 + "\n")
+                    
+                # Reset the clarification state
+                self.waiting_for_clarification = False
+                self.current_clarification_query = None
+                
+                return timeout_msg
+                
+            # Log the response
+            with open(self.instruction_log_file, "a") as f:
+                f.write(f"[{timestamp}] CLARIFICATION RESPONSE: {response}\n")
+                f.write("-" * 80 + "\n")
+                
+            # Reset the clarification state
+            self.waiting_for_clarification = False
+            self.current_clarification_query = None
+            
+            return response
+                
+        except Exception as e:
+            error_msg = f"Error getting human clarification: {str(e)}"
+            print(f"Error: {error_msg}")
+            return error_msg
+    
     def _start_http_server(self):
         """Start a custom HTTP server to serve screenshots and process commands"""
         try:
@@ -386,7 +571,7 @@ class InteractiveAutomation:
                 viewer_url = self._create_viewer_html(self.current_screenshot)
                 print(f"Web interface available at: {viewer_url}")
                 # Also display alternative URL that might be more reliable
-                direct_url = f"http://localhost:{self.server_port}"
+                direct_url = f"http://localhost:{self.server_port}/"
                 print(f"If the above URL doesn't work, try: {direct_url}")
             
         except Exception as e:
@@ -401,6 +586,27 @@ class InteractiveAutomation:
         # Get relative path for screenshot
         rel_path = os.path.relpath(screenshot_path, start=os.getcwd())
         
+        # Generate the clarification section HTML if a query is pending
+        clarification_html = ""
+        if self.waiting_for_clarification and self.current_clarification_query:
+            clarification_html = f"""
+            <div class="clarification-request">
+                <h2>Clarification Needed</h2>
+                <div class="query-box">
+                    <p><strong>Agent Question:</strong> {self.current_clarification_query}</p>
+                </div>
+                <div class="form-group">
+                    <label for="clarification_response">Your Response:</label>
+                    <input type="text" id="clarification_response" name="clarification_response" 
+                           placeholder="Provide your clarification here..." required>
+                    <button type="button" id="respond-btn" onclick="submitClarification()">
+                        Submit Response
+                    </button>
+                </div>
+                <div id="clarification-status" class="status" style="display: none;"></div>
+            </div>
+            """
+        
         # Create HTML content with manual refresh button and responsive design
         html_content = f"""
         <!DOCTYPE html>
@@ -410,36 +616,185 @@ class InteractiveAutomation:
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Android Automation</title>
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 0; padding: 10px; text-align: center; max-width: 800px; margin: 0 auto; }}
-                h1 {{ color: #333; font-size: 24px; margin: 10px 0; }}
-                .screenshot {{ max-width: 70%; height: auto; border: 1px solid #ddd; margin: 10px 0; }}
-                .info {{ margin: 10px 0; }}
-                .step {{ font-weight: bold; }}
-                .form-group {{ margin: 10px 0; text-align: left; }}
-                label {{ display: block; margin-bottom: 5px; font-weight: bold; }}
-                input[type="text"] {{ width: 100%; padding: 8px; box-sizing: border-box; }}
-                button {{ background-color: #4CAF50; color: white; padding: 10px 15px; border: none; cursor: pointer; margin-top: 10px; }}
-                button:hover {{ background-color: #45a049; }}
-                .refresh-button {{ background-color: #2196F3; margin-bottom: 15px; }}
-                .status {{ padding: 8px; border-radius: 4px; margin: 10px 0; }}
-                .pending {{ background-color: #fff3cd; color: #856404; }}
-                .success {{ background-color: #d4edda; color: #155724; }}
-                .error {{ background-color: #f8d7da; color: #721c24; }}
+                * {{ box-sizing: border-box; }}
+                body {{ 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    margin: 0; 
+                    padding: 20px; 
+                    background-color: #f5f5f5;
+                    color: #333;
+                }}
+                .container {{
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    background-color: white;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    padding: 20px;
+                }}
+                h1 {{ 
+                    color: #2c3e50; 
+                    font-size: 28px; 
+                    margin-top: 0;
+                    margin-bottom: 20px;
+                    padding-bottom: 10px;
+                    border-bottom: 1px solid #eee;
+                    text-align: center;
+                }}
+                h2 {{ 
+                    color: #3498db; 
+                    font-size: 22px; 
+                    margin: 15px 0 10px 0; 
+                }}
+                .flex-container {{
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    align-items: flex-start;
+                }}
+                .screenshot-container {{
+                    flex: 1;
+                    min-width: 300px;
+                    text-align: center;
+                }}
+                .controls-container {{
+                    flex: 1;
+                    min-width: 300px;
+                }}
+                .screenshot {{ 
+                    max-width: 100%; 
+                    height: auto; 
+                    border: 1px solid #ddd; 
+                    border-radius: 4px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }}
+                .info {{ 
+                    margin: 10px 0;
+                    background-color: #f1f8ff;
+                    padding: 10px;
+                    border-radius: 4px;
+                    border-left: 4px solid #3498db;
+                }}
+                .step {{ 
+                    font-weight: bold; 
+                }}
+                .form-group {{ 
+                    margin: 15px 0; 
+                    text-align: left; 
+                }}
+                label {{ 
+                    display: block; 
+                    margin-bottom: 8px; 
+                    font-weight: 600;
+                    color: #555;
+                }}
+                input[type="text"] {{ 
+                    width: 100%; 
+                    padding: 10px; 
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    font-size: 16px;
+                }}
+                input[type="text"]:focus {{
+                    outline: none;
+                    border-color: #3498db;
+                    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+                }}
+                button {{ 
+                    background-color: #3498db; 
+                    color: white; 
+                    padding: 10px 15px; 
+                    border: none; 
+                    border-radius: 4px;
+                    cursor: pointer; 
+                    margin-top: 10px;
+                    font-size: 16px;
+                    transition: background-color 0.2s;
+                }}
+                button:hover {{ 
+                    background-color: #2980b9; 
+                }}
+                .refresh-button {{ 
+                    background-color: #2ecc71; 
+                    margin-bottom: 15px; 
+                }}
+                .refresh-button:hover {{ 
+                    background-color: #27ae60; 
+                }}
+                .status {{ 
+                    padding: 12px; 
+                    border-radius: 4px; 
+                    margin: 15px 0; 
+                }}
+                .pending {{ 
+                    background-color: #fff3cd; 
+                    color: #856404; 
+                    border-left: 4px solid #ffc107;
+                }}
+                .success {{ 
+                    background-color: #d4edda; 
+                    color: #155724; 
+                    border-left: 4px solid #28a745;
+                }}
+                .error {{ 
+                    background-color: #f8d7da; 
+                    color: #721c24; 
+                    border-left: 4px solid #dc3545;
+                }}
+                .query-box {{ 
+                    background-color: #e9ecef; 
+                    padding: 15px; 
+                    border-radius: 5px; 
+                    text-align: left; 
+                    margin: 10px 0; 
+                }}
+                .clarification-request {{ 
+                    background-color: #f8f9fa; 
+                    border: 1px solid #dee2e6; 
+                    padding: 20px; 
+                    border-radius: 8px; 
+                    margin: 15px 0; 
+                    border-left: 4px solid #ff9800;
+                }}
+                @media (max-width: 768px) {{
+                    .flex-container {{
+                        flex-direction: column;
+                    }}
+                }}
             </style>
         </head>
         <body>
-            <h1>Android Automation with React Agent</h1>
-            <div class="info">
-                <p class="step">Step: {self.current_step + 1}</p>
+            <div class="container">
+                <h1>Android Automation with React Agent</h1>
+                
+                <div class="info">
+                    <p class="step">Step: {self.current_step + 1}</p>
+                </div>
+                
+                <button class="refresh-button" onclick="window.location.reload()">
+                    <i class="fa fa-refresh"></i> Refresh Screen
+                </button>
+                
+                <div class="flex-container">
+                    <div class="screenshot-container">
+                        <img class="screenshot" src="/{rel_path}" alt="Android Screen">
+                    </div>
+                    
+                    <div class="controls-container">
+                        {clarification_html}
+                        
+                        <div class="form-group" {'' if not self.waiting_for_clarification else 'style="display: none;"'}>
+                            <label for="instruction">Enter Natural Language Instruction:</label>
+                            <input type="text" id="instruction" name="instruction" 
+                                   placeholder="E.g., Click the menu button" required>
+                            <button type="button" id="execute-btn" onclick="submitInstruction()">
+                                Execute
+                            </button>
+                        </div>
+                        <div id="status" class="status" style="display: none;"></div>
+                    </div>
+                </div>
             </div>
-            <button class="refresh-button" onclick="window.location.reload()">Refresh Screen</button>
-            <img class="screenshot" src="/{rel_path}" alt="Android Screen">
-            <div class="form-group">
-                <label for="instruction">Enter Natural Language Instruction:</label>
-                <input type="text" id="instruction" name="instruction" placeholder="E.g., Click the menu button" required>
-                <button type="button" id="execute-btn" onclick="submitInstruction()">Execute</button>
-            </div>
-            <div id="status" class="status" style="display: none;"></div>
             
             <script>
                 // Function to submit the instruction using fetch API
@@ -510,6 +865,67 @@ class InteractiveAutomation:
                         executeBtn.disabled = false;
                     }});
                 }}
+                
+                // Function to submit clarification response
+                function submitClarification() {{
+                    const responseInput = document.getElementById('clarification_response');
+                    const statusDiv = document.getElementById('clarification-status');
+                    const respondBtn = document.getElementById('respond-btn');
+                    
+                    // Get the response
+                    const response = responseInput.value.trim();
+                    if (!response) {{
+                        statusDiv.className = 'status error';
+                        statusDiv.style.display = 'block';
+                        statusDiv.innerHTML = 'Please enter a response';
+                        return;
+                    }}
+                    
+                    // Disable button and show pending status
+                    respondBtn.disabled = true;
+                    statusDiv.className = 'status pending';
+                    statusDiv.style.display = 'block';
+                    statusDiv.innerHTML = 'Sending response...';
+                    
+                    // Create form data
+                    const formData = new URLSearchParams();
+                    formData.append('clarification_response', response);
+                    
+                    // Send the response using fetch
+                    fetch('/respond_clarification', {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        }},
+                        body: formData.toString()
+                    }})
+                    .then(response => {{
+                        if (!response.ok) {{
+                            throw new Error('Network response was not ok: ' + response.status);
+                        }}
+                        return response.json();
+                    }})
+                    .then(data => {{
+                        console.log('Success:', data);
+                        
+                        // Update status based on response
+                        statusDiv.className = 'status success';
+                        statusDiv.innerHTML = 'Response sent successfully!';
+                        
+                        // Disable input and button to prevent further responses
+                        responseInput.disabled = true;
+                        respondBtn.disabled = true;
+                        
+                        // Automatically refresh after successful response (with a delay)
+                        setTimeout(() => window.location.reload(), 2000);
+                    }})
+                    .catch(error => {{
+                        console.error('Error:', error);
+                        statusDiv.className = 'status error';
+                        statusDiv.innerHTML = 'Error: ' + error.message;
+                        respondBtn.disabled = false;
+                    }});
+                }}
             </script>
         </body>
         </html>
@@ -573,9 +989,22 @@ class InteractiveAutomation:
             
             try:
                 if not hasattr(self, 'browser_opened'):
-                    webbrowser.open(viewer_url)
-                    self.browser_opened = True
-                    print("Opened screenshot in browser")
+                    # Open the browser window - try both session URL and root URL
+                    try:
+                        webbrowser.open(viewer_url)
+                        self.browser_opened = True
+                        print("Opened screenshot in browser")
+                    except Exception as e:
+                        print(f"Could not open browser with session URL: {str(e)}")
+                        # Try with root URL as fallback
+                        root_url = f"http://localhost:{self.server_port}/"
+                        try:
+                            webbrowser.open(root_url)
+                            self.browser_opened = True
+                            print(f"Opened browser with root URL: {root_url}")
+                        except Exception as e2:
+                            print(f"Could not open browser with root URL: {str(e2)}")
+                            print(f"Please manually open: {viewer_url} or {root_url}")
             except Exception as e:
                 print(f"Could not open browser: {str(e)}")
                 print(f"Please manually open: {viewer_url}")
