@@ -1,12 +1,5 @@
 1. open tata 1mg app
-2. Go to profile in the bottom of the screen. 
-3. scroll to bottom and check all the elements once
-4. click on home icon in the bottom bar of the app
-5. click on pharmacy tab just below search bar and check content are visible
-6. go back to the previous screen
-7. scroll and find cetaphill brand icon and click on it. 
-8. go to face and body face cream category
-9. add first item to the cart
-10. click on go to cart button in the bottom of the screen
-11. any pop up comes cancel it. 
-12. increase the added item from one to two
+2. search protein powder
+3. scroll and put the first element into cart. 
+4. press go to cart button at the bottom.
+5. incease the quantity of the added item from 1 to 2. 

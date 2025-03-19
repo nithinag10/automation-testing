@@ -130,26 +130,33 @@ class DeviceActions:
             print(f"Error swiping: {str(e)}")
             return False
             
+
     def input_text(self, text):
         """
-        Input text on the device.
-        
+        Input text on the device using ADB.
+
         Args:
-            text (str): Text to input.
-                
+            text (str): The text to input.
+
         Returns:
-            bool: True if the text input was successful, False otherwise.
+            bool: True if the command executed successfully, False otherwise.
         """
-        if not UI_AUTOMATOR_AVAILABLE or not self.device:
-            print("UIAutomator2 not available or no device connected. Cannot input text.")
-            return False
-            
         try:
-            self.device.send_keys(text)
-            print(f"Input text: {text}")
-            return True
+            # Escape special characters in the text for ADB compatibility
+            escaped_text = text.replace(" ", "%s")
+            command = f'adb shell input text "{escaped_text}"'
+            
+            # Execute the ADB command
+            result = os.system(command)
+            
+            if result == 0:
+                print(f"Successfully inputted text: {text}")
+                return True
+            else:
+                print(f"Failed to input text: {text}")
+                return False
         except Exception as e:
-            print(f"Error inputting text: {str(e)}")
+            print(f"Error while inputting text via ADB: {str(e)}")
             return False
             
     def press_key(self, key_code):
