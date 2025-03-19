@@ -26,3 +26,5 @@ Thumbs.db
 results/
 activity_logs/
 logs/
+
+!session/*
