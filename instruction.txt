@@ -1,5 +1,4 @@
-1. open tata 1mg app
-2. search protein powder
-3. scroll and put the first element into cart. 
-4. press go to cart button at the bottom.
-5. incease the quantity of the added item from 1 to 2. 
+1. Try to signin with phone number 9480545372
+2. ask for otp 
+3. enter the otp and login
+4. finish once completely login

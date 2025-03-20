@@ -1,0 +1,21 @@
+{
+  "steps": [
+    {
+      "step_id": 1,
+      "instruction": "Try to signin with phone number 9480545372"
+    },
+    {
+      "step_id": 2,
+      "instruction": "Ask for OTP"
+    },
+    {
+      "step_id": 3,
+      "instruction": "Enter the OTP and login"
+    },
+    {
+      "step_id": 4,
+      "instruction": "Finish once completely logged in"
+    }
+  ],
+  "total_steps": 4
+}

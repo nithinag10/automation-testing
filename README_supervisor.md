@@ -1,78 +1,95 @@
 # Android ADB API with LangGraph Supervisor
 
-This project implements an Android device automation system using LangGraph's Supervisor pattern. The system allows you to automate tasks on Android devices using natural language instructions.
+This project implements an Android device automation system that allows you to automate tasks on Android devices using natural language instructions.
 
-## Features
-
-- **LangGraph Supervisor Architecture**: Uses the `create_supervisor` function to manage specialized agents
-- **Multi-Agent System**: Includes action and validation agents with specific responsibilities
-- **Screenshot Analysis**: Captures and analyzes screenshots with a grid overlay for precise touch targets
-- **Device Interaction**: Supports clicking, swiping, typing, and pressing system keys
-- **Memory Management**: Includes short-term and long-term memory for the multi-agent system
-
-## Requirements
+## Prerequisites
 
 - Python 3.10+
-- Android device connected via ADB
+- Android device with USB debugging enabled
+- ADB (Android Debug Bridge) installed
 - OpenAI API key
 
 ## Installation
 
-1. Install the required packages:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/android-adb-api.git
+   cd android-adb-api
+   ```
 
-```bash
-pip install -r requirements.txt
-```
+2. **Create a virtual environment**
+   ```bash
+   python -m venv venv
+   
+   # On Windows
+   venv\Scripts\activate
+   # On macOS/Linux
+   source venv/bin/activate
+   ```
 
-2. Set up your environment variables by creating a `.env` file:
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-```
-OPENAI_API_KEY=your_openai_api_key
-GEMINI_API_KEY=your_gemini_api_key  # Optional, for screenshot analysis
-```
+4. **Set up environment variables**
+   Create a `.env` file in the project root:
+   ```
+   OPENAI_API_KEY=your_openai_api_key
+   GEMINI_API_KEY=your_gemini_api_key  # Optional, for screenshot analysis
+   LANGSMITH_API_KEY=your_langsmith_api_key  # Optional, for tracing
+   ```
 
 ## Usage
 
-1. Connect your Android device via ADB
-2. Run the supervisor application:
+1. **Connect your Android device**
+   - Connect your device via USB
+   - Enable USB debugging in developer options
+   - Verify connection with `adb devices`
 
-```bash
-python supervisor_app.py
-```
+2. **Run the application**
+   ```bash
+   python main.py
+   ```
 
-3. Enter your automation task when prompted
+3. **Using instruction files**
+   You can create an instruction file with numbered steps:
+   ```
+   1. Open the Settings app
+   2. Navigate to Display settings
+   3. Toggle Dark mode
+   4. Return to the home screen
+   ```
 
-## Architecture
+   Then run:
+   ```bash
+   python main.py --instruction-file your_instructions.txt
+   ```
 
-The system uses LangGraph's Supervisor pattern to manage two specialized agents:
+4. **Command-line options**
+   ```bash
+   # Run with a specific model
+   python main.py --model gpt-4o
+   
+   # Run with verbose logging
+   python main.py --verbose
+   
+   # Run with a specific instruction
+   python main.py --instruction "Open the calculator app and perform 2+2"
+   ```
 
-1. **Action Agent**: Performs actions on the device (clicking, swiping, typing)
-2. **Validation Agent**: Verifies that actions were successful
+## Troubleshooting
 
-The supervisor decides which agent to use based on the current task and coordinates their work.
+- **No devices found**: Ensure USB debugging is enabled and the device is properly connected
+- **API key errors**: Verify your API keys in the `.env` file
+- **Execution errors**: Check the activity logs in the `activity_logs` directory
 
-## Implementation Details
+## Log Files
 
-- **Screen Resolution**: 1080x2400 pixels (as specified in memory)
-- **Pixel Density**: 405 PPI (as specified in memory)
-- **Touch Target Size**: 7mm grid overlay for precise interactions
-- **Screenshot Method**: Uses `adb exec-out screencap -p` for reliable screenshots (as specified in memory)
+- Activity logs are stored in the `activity_logs` directory
+- Screenshots are saved in the `screenshots` directory
+- Execution results are stored in the `results` directory
 
-## Comparing with Previous Implementation
+## License
 
-The new supervisor implementation offers several advantages over the previous approach:
-
-1. **Simplified Architecture**: Uses the `create_supervisor` function for cleaner code
-2. **Full Message History**: Maintains the complete conversation history between agents
-3. **Memory Management**: Includes checkpointing and state storage
-4. **Easier Extension**: Simpler to add new specialized agents
-
-## Example Tasks
-
-- "Open the Settings app and turn on Airplane mode"
-- "Take a screenshot, analyze it, and tell me what apps are visible"
-- "Open the browser and search for 'Android automation'"
-
-## Customization
-
-You can modify the `instruction.txt` file to provide specific guidance for your automation tasks.
+This project is licensed under the MIT License - see the LICENSE file for details.
