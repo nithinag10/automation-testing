@@ -1,4 +1,4 @@
-1. Try to signin with phone number 9480545372
+1. Try to signin with phone number <Your number>
 2. ask for otp 
 3. enter the otp and login
 4. finish once completely login
