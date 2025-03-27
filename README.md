@@ -36,6 +36,12 @@ A modular framework for automating Android device interactions using a multi-age
    LANGSMITH_API_KEY=your_langsmith_api_key
    ```
 
+## Demo Video
+**[Watch the Demo Video](https://drive.google.com/file/d/1L4L13qGXp4e0tNNeFqY8tRW_BdY0wjdD/view?usp=sharing)**
+
+### Demo Preview
+![Demo Preview](https://drive.google.com/thumbnail?id=1L4L13qGXp4e0tNNeFqY8tRW_BdY0wjdD)
+
 ## Usage
 
 1. **Connect your Android device**
@@ -123,3 +129,4 @@ android-adb-api/
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
